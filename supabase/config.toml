@@ -1,0 +1,28 @@
+project_id = "ycbpxbqbzbyhuqqrnczp"
+
+[functions.send-project-notification]
+verify_jwt = false
+
+[functions.generate-weekly-report]
+verify_jwt = false
+
+[functions.generate-task-suggestions]
+verify_jwt = false
+
+[functions.calculate-task-progress]
+verify_jwt = false
+
+[functions.generate-monev-summary]
+verify_jwt = false
+
+[functions.check-deadlines]
+verify_jwt = false
+
+[functions.check-reminders]
+verify_jwt = false
+
+[functions.sync-google-calendar]
+verify_jwt = false
+
+[functions.send-welcome-email]
+verify_jwt = false

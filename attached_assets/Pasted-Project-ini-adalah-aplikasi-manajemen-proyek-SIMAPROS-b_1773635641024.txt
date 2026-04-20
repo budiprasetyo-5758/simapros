@@ -1,0 +1,92 @@
+Project ini adalah aplikasi manajemen proyek (SIMAPROS) berbasis React + Supabase dengan fitur Timeline, Meeting, Gantt Chart, dan approval workflow. Sudah ada tabel meetings, meeting_todos, projects, gantt_tasks, dan storage bucket meeting-attachments. Sistem role menggunakan tabel user_roles dengan enum super_admin, admin, user, project_executor.
+
+[INSTRUKSI KHUSUS WORKFLOW]
+Karena database Supabase berada di luar Replit, kita akan membagi tugas menjadi 2 langkah:
+Langkah 1: Buatkan saya script SQL lengkap (DDL) untuk membuat tabel baru, Storage Bucket (jika bisa via SQL), dan RLS Policies sesuai skema di bawah. JANGAN menulis kode React dulu. Tunggu sampai saya mengonfirmasi bahwa script SQL telah saya jalankan di Supabase SQL Editor.
+Langkah 2: Setelah saya bilang "Database Ready", barulah mulai menulis kode React (UI, Routing, Logic, dan integrasi Supabase Client).
+
+--- Kebutuhan Fitur ---
+Tambahkan menu sidebar baru bernama "Follow Up" dengan route /follow-up. Menu ini terpisah dari fitur Meeting di Timeline — memiliki tabel database, logic, dan UI tersendiri.
+
+1. Tampilan Awal: Folder Cards
+Halaman utama menampilkan 3 card berbentuk folder dengan nama:
+- Rapimtas (Rapat Pimpinan Terbatas)
+- Rapim (Rapat Pimpinan)
+- Others (Lainnya)
+Setiap card folder bisa diklik untuk masuk ke halaman daftar meeting dalam kategori tersebut.
+
+2. Halaman Dalam Folder (Daftar Meeting)
+- Tampilan awal adalah halaman kosong dengan pesan "Belum ada meeting".
+- Terdapat tombol "Tambah Meeting" di kanan atas.
+- Setiap meeting yang sudah dibuat ditampilkan sebagai card berisi ringkasan (nama meeting, jumlah task, jumlah file, tanggal dibuat).
+
+3. Form Tambah Meeting (Pop-up Dialog)
+Ketika tombol "Tambah Meeting" ditekan, muncul dialog form dengan field:
+- Nama Meeting: Text input (Wajib diisi)
+- Tasks: Dynamic list (Bisa menambah lebih dari 1 task. Setiap task memiliki: Nama task (text) dan Upload file (multiple files per task, opsional))
+- Upload File Meeting: File upload (File umum untuk meeting, bisa lebih dari 1, terpisah dari file task)
+
+4. Detail Meeting Card (Setelah dibuat)
+Setiap card meeting yang sudah dibuat, jika diklik/expand, menampilkan:
+- Daftar task dalam bentuk checklist. Setiap task bisa ditandai selesai (checkbox).
+- Ketika ditandai selesai, catat timestamp dan tampilkan informasi: "Selesai pada [tanggal] [jam:menit]".
+- Jika task memiliki file attachment, tampilkan tombol download di samping nama task.
+- File meeting (yang diupload di level meeting) juga bisa didownload.
+
+5. Tab "File Repository"
+Tambahkan tab kedua di dalam halaman folder (di samping tab daftar meeting), berisi:
+- Kumpulan semua file yang sudah diupload dalam folder/kategori tersebut.
+- Sortir/filter berdasarkan sumber file: File dari Task (menampilkan nama task & meeting) atau File dari Meeting (menampilkan nama meeting).
+- Tampilkan metadata: nama file, ukuran, tanggal upload, sumber, tombol download.
+
+6. Database Schema (Tabel Baru)
+Tolong konversi skema ini menjadi script SQL yang siap dijalankan:
+
+followup_meetings
+- id (uuid, PK, default uuid_generate_v4())
+- category (text: 'rapimtas' | 'rapim' | 'others')
+- title (text, nama meeting)
+- created_by (uuid, ref auth.users)
+- created_at (timestamptz)
+- updated_at (timestamptz)
+
+followup_tasks
+- id (uuid, PK, default uuid_generate_v4())
+- meeting_id (uuid, FK → followup_meetings, on delete cascade)
+- title (text, nama task)
+- is_completed (boolean, default false)
+- completed_at (timestamptz, nullable)
+- sort_order (integer)
+- created_at (timestamptz)
+- updated_at (timestamptz)
+
+followup_files
+- id (uuid, PK, default uuid_generate_v4())
+- meeting_id (uuid, FK → followup_meetings, nullable, on delete cascade)
+- task_id (uuid, FK → followup_tasks, nullable, on delete cascade)
+- file_name (text)
+- file_url (text)
+- file_size (bigint, nullable)
+- file_type (text: 'task' | 'meeting')
+- uploaded_by (uuid, ref auth.users)
+- created_at (timestamptz)
+
+Storage: Berikan instruksi atau SQL untuk membuat bucket `followup-attachments` (public).
+
+7. RLS Policies (Buatkan script SQL-nya)
+- Super Admin: Full access (ALL) pada semua tabel followup.
+- Admin: SELECT pada semua, INSERT/UPDATE pada meeting yang mereka buat.
+- User/Project Executor: SELECT pada semua, INSERT/UPDATE pada meeting yang mereka buat.
+- DELETE: Hanya Super Admin dan creator.
+
+8. Routing & Sidebar
+- Tambahkan menu "Follow Up" di sidebar (AdminSidebarLayout) dengan ikon yang sesuai (misal FolderCheck dari lucide).
+- Route: /follow-up → halaman utama (3 folder card).
+- Route: /follow-up/:category → halaman daftar meeting per kategori (dengan tab Meeting & Files).
+
+9. Constraint Teknis
+- Gunakan design system yang sudah ada (shadcn/ui, Tailwind semantic tokens).
+- Upload file menggunakan Supabase Storage API ke bucket followup-attachments.
+- Invalidate query cache (misal React Query/SWR) setelah create/update/delete agar UI langsung refresh.
+- Validasi: nama meeting wajib, minimal 1 task saat create meeting.
+- Responsive untuk viewport ~988px.
