@@ -36,7 +36,7 @@ const priorityMatrix: Record<Urgency, Record<Impact, CalculatedPriority>> = {
 };
 
 export function calculatePriority(urgency: Urgency, impact: Impact): CalculatedPriority {
-  return priorityMatrix[urgency][impact];
+  return priorityMatrix[urgency]?.[impact] || 'medium';
 }
 
 export const urgencyOptions: { value: Urgency; label: string }[] = [

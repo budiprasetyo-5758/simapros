@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,18 +39,30 @@ export function AddTaskDialog({
   siblingTasks,
   phase,
 }: AddTaskDialogProps) {
-  // Calculate automatic WBS number
+  // Calculate automatic WBS number â€” local per phase
   const calculateWbsNumber = () => {
-    if (!parentTask) return '';
-    
-    const parentWbs = parentTask.wbs_number || '';
-    if (!parentWbs) return '';
-    
-    // Find existing subtasks of this parent
-    const existingSubtaskCount = siblingTasks.filter(t => t.parent_task_id === parentTask.id).length;
-    const nextSubNumber = existingSubtaskCount + 1;
-    
-    return `${parentWbs}.${nextSubNumber}`;
+    // Sub-task: parent.{n} based on existing siblings under same parent
+    if (parentTask) {
+      const parentWbs = parentTask.wbs_number || '';
+      if (!parentWbs) return '';
+      const existingSubtaskCount = siblingTasks.filter(t => t.parent_task_id === parentTask.id).length;
+      return `${parentWbs}.${existingSubtaskCount + 1}`;
+    }
+
+    // Root task in a phase: WBS is local per phase (1, 2, 3, ...)
+    if (phase) {
+      const rootTasksInPhase = siblingTasks.filter(
+        t => !t.parent_task_id && (t.phase || '').trim().toLowerCase() === phase.trim().toLowerCase()
+      );
+      // Find max integer WBS already used in this phase, then +1
+      const maxNum = rootTasksInPhase.reduce((max, t) => {
+        const first = parseInt((t.wbs_number || '').split('.')[0], 10);
+        return isNaN(first) ? max : Math.max(max, first);
+      }, 0);
+      return `${maxNum + 1}`;
+    }
+
+    return '';
   };
 
   const [formData, setFormData] = useState({
@@ -115,7 +127,11 @@ export function AddTaskDialog({
 
   const dialogTitle = parentTask 
     ? `Tambah Sub-Task untuk "${parentTask.name}"`
-    : 'Tambah Task Baru';
+    : phase
+      ? `Tambah Task pada Fase "${phase}"`
+      : 'Tambah Task Baru';
+
+  const wbsAutoFilled = !!parentTask || (!!phase && !!formData.wbs_number);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -134,10 +150,12 @@ export function AddTaskDialog({
                 onChange={(e) => setFormData({ ...formData, wbs_number: e.target.value })}
                 placeholder={parentTask ? "Otomatis" : "1.1"}
                 className="bg-muted/50"
-                readOnly={!!parentTask}
+                readOnly={wbsAutoFilled}
               />
-              {parentTask && (
-                <p className="text-xs text-muted-foreground">WBS otomatis berdasarkan parent task</p>
+              {wbsAutoFilled && (
+                <p className="text-xs text-muted-foreground">
+                  {parentTask ? 'WBS otomatis berdasarkan parent task' : 'WBS otomatis berdasarkan fase'}
+                </p>
               )}
             </div>
             <div className="grid gap-2">

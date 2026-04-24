@@ -29,11 +29,13 @@ interface ProjectDetailModalProps {
   onRequestUpdate?: (projectId: string) => Promise<{ success: boolean }>;
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: 'Menunggu', className: 'bg-muted text-muted-foreground' },
-  approved: { label: 'Aktif', className: 'bg-success/10 text-success border-success/20' },
+  approved: { label: 'Disetujui', className: 'bg-success/10 text-success border-success/20' },
+  active: { label: 'Aktif', className: 'bg-primary/10 text-primary border-primary/20' },
   rejected: { label: 'Ditolak', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   revision: { label: 'Revisi', className: 'bg-revision/10 text-revision border-revision/20' },
+  pending_creation: { label: 'Menunggu Pembuatan', className: 'bg-warning/10 text-warning border-warning/20' }
 };
 
 const priorityConfig = {
@@ -227,14 +229,14 @@ export function ProjectDetailModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                <Badge variant="outline" className={cn('text-xs', statusConfig[project.status].className)}>
-                  {statusConfig[project.status].label}
+                <Badge variant="outline" className={cn('text-xs', statusConfig[project.status]?.className || 'bg-muted text-muted-foreground')}>
+                  {statusConfig[project.status]?.label || project.status}
                 </Badge>
                 {isSuperAdmin && project.status === 'approved' ? (
                   <Select value={project.priority} onValueChange={(v) => handleUpdatePriority(v as ProjectPriority)}>
                     <SelectTrigger className="h-7 w-auto gap-1 px-2 text-xs border-dashed">
-                      <span className={cn('font-medium', priorityConfig[project.priority].className.replace('bg-', 'text-').split(' ')[1])}>
-                        {priorityConfig[project.priority].label}
+                      <span className={cn('font-medium', priorityConfig[project.priority]?.className?.replace('bg-', 'text-')?.split(' ')[1] || 'text-muted-foreground')}>
+                        {priorityConfig[project.priority]?.label || project.priority || 'Tidak Ada'}
                       </span>
                     </SelectTrigger>
                     <SelectContent>
@@ -245,8 +247,8 @@ export function ProjectDetailModal({
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Badge variant="outline" className={cn('text-xs', priorityConfig[project.priority].className)}>
-                    {priorityConfig[project.priority].label}
+                  <Badge variant="outline" className={cn('text-xs', priorityConfig[project.priority]?.className || 'bg-muted text-muted-foreground')}>
+                    {priorityConfig[project.priority]?.label || project.priority || 'Tidak Ada'}
                   </Badge>
                 )}
                 {project.update_requested && (

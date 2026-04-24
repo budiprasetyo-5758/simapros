@@ -1,3 +1,5 @@
+// Need to import React for Fragment
+import React from 'react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parseISO, differenceInDays, eachDayOfInterval, getWeek, isSameDay, getMonth, getYear, isToday } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
@@ -57,6 +59,30 @@ const phaseColors: Record<string, string> = {
   execution: 'bg-chart-2',
   evaluation: 'bg-chart-3',
   followup: 'bg-chart-4',
+};
+
+// Color palette used for custom phases (deterministic per phase name)
+const customPhasePalette = [
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+  'bg-primary',
+  'bg-success',
+  'bg-warning',
+  'bg-destructive',
+];
+
+// Stable hash â†’ consistent color for the same phase name
+const getPhaseColor = (phase: string): string => {
+  const key = phase.trim().toLowerCase();
+  if (phaseColors[key]) return phaseColors[key];
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return customPhasePalette[hash % customPhasePalette.length];
 };
 
 export function SpreadsheetGantt({
@@ -125,9 +151,9 @@ export function SpreadsheetGantt({
     pendingCount 
   } = useTaskEditRequests(projectId);
 
-  // Project executors can now directly edit tasks without approval
-  // Only project owners (regular users) need to request edits via approval
-  const canRequestEdit = isProjectOwner && !isAdmin && !isProjectExecutor;
+  // Executor and owner can request edits but not edit directly
+  // Only super admin can edit directly
+  const canRequestEdit = (isProjectExecutor || isProjectOwner) && !isAdmin;
 
   const { toast } = useToast();
 
@@ -184,14 +210,31 @@ export function SpreadsheetGantt({
     }
   };
 
-  // Build task tree with subtasks
+  // Natural WBS comparator (e.g. "1" < "2" < "10"; "1.2" < "1.10")
+  const compareWbs = (a: string, b: string): number => {
+    const pa = (a || '').split('.').map(s => parseInt(s, 10));
+    const pb = (b || '').split('.').map(s => parseInt(s, 10));
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const av = isNaN(pa[i]) ? 0 : pa[i];
+      const bv = isNaN(pb[i]) ? 0 : pb[i];
+      if (av !== bv) return av - bv;
+    }
+    return 0;
+  };
+
+  // Build task tree with subtasks â€” sorted by WBS, not by date
   const taskTree = useMemo(() => {
-    const parentTasks = tasks.filter(t => !t.parent_task_id);
+    const parentTasks = tasks
+      .filter(t => !t.parent_task_id)
+      .sort((a, b) => compareWbs(a.wbs_number || '', b.wbs_number || ''));
     const childTasks = tasks.filter(t => t.parent_task_id);
-    
+
     return parentTasks.map(parent => ({
       ...parent,
-      subtasks: childTasks.filter(child => child.parent_task_id === parent.id),
+      subtasks: childTasks
+        .filter(child => child.parent_task_id === parent.id)
+        .sort((a, b) => compareWbs(a.wbs_number || '', b.wbs_number || '')),
     }));
   }, [tasks]);
 
@@ -199,7 +242,7 @@ export function SpreadsheetGantt({
   const groupedTasks = useMemo(() => {
     const groups: Record<string, typeof taskTree> = {};
     const ungrouped: typeof taskTree = [];
-    
+
     taskTree.forEach(task => {
       const phase = task.phase?.trim() || '';
       if (phase) {
@@ -212,7 +255,22 @@ export function SpreadsheetGantt({
       }
     });
 
-    return { groups, ungrouped };
+    // Order phases by earliest created_at among tasks in that phase.
+    // This decouples phase order from WBS, so editing WBS does not
+    // shift a phase up/down. Phases keep the order in which they were created.
+    const orderedPhases = Object.entries(groups)
+      .map(([phase, phaseTasks]) => {
+        const allInPhase = phaseTasks.flatMap(t => [t, ...t.subtasks]);
+        const times = allInPhase
+          .map(t => (t.created_at ? new Date(t.created_at).getTime() : NaN))
+          .filter(n => !isNaN(n));
+        const earliest = times.length ? Math.min(...times) : Number.MAX_SAFE_INTEGER;
+        return { phase, earliest };
+      })
+      .sort((a, b) => a.earliest - b.earliest)
+      .map(g => g.phase);
+
+    return { groups, ungrouped, orderedPhases };
   }, [taskTree]);
 
   const togglePhase = (phase: string) => {
@@ -239,7 +297,7 @@ export function SpreadsheetGantt({
     });
   };
 
-  const allPhases = Object.keys(groupedTasks.groups);
+  const allPhases = groupedTasks.orderedPhases;
 
   const phasesToRender = allPhases;
 
@@ -346,7 +404,7 @@ export function SpreadsheetGantt({
     }
   };
 
-  const canEdit = isAdmin || isProjectExecutor;
+  const canEdit = isAdmin;
 
   const handleStartEdit = (task: GanttTask) => {
     if (!canEdit) return;
@@ -384,6 +442,13 @@ export function SpreadsheetGantt({
     setAddTaskDialogOpen(true);
   };
 
+  // Open dialog for adding a new root task inside an existing phase
+  const handleAddTaskToPhase = (phase: string) => {
+    setSelectedParentTask(null);
+    setSelectedPhaseForTask(phase);
+    setAddTaskDialogOpen(true);
+  };
+
   // Open dialog for adding phase
   const handleOpenAddPhase = () => {
     setAddPhaseDialogOpen(true);
@@ -400,10 +465,21 @@ export function SpreadsheetGantt({
     status: TaskStatus;
     monev: string;
   }) => {
-    // Calculate WBS for first task in new phase - start from .1
-    const existingPhaseCount = allPhases.length;
-    const phaseNumber = existingPhaseCount + 1;
-    const wbsNumber = `${phaseNumber}.1`;
+    // WBS for first task in a new phase is local: always "1".
+    // Safeguard: if a task already exists in the same phase (race / re-entry),
+    // use max(int(wbs)) + 1 from existing root tasks LOCAL to this phase.
+    const phaseKey = (data.phase || '').trim().toLowerCase();
+    const existingRootInPhase = tasks.filter(
+      t => !t.parent_task_id && (t.phase || '').trim().toLowerCase() === phaseKey
+    );
+    let wbsNumber = '1';
+    if (existingRootInPhase.length > 0) {
+      const maxNum = existingRootInPhase.reduce((max, t) => {
+        const first = parseInt((t.wbs_number || '').split('.')[0], 10);
+        return isNaN(first) ? max : Math.max(max, first);
+      }, 0);
+      wbsNumber = `${maxNum + 1}`;
+    }
 
     const result = await onAddTask({
       project_id: projectId,
@@ -575,7 +651,7 @@ export function SpreadsheetGantt({
     
     return (
       <tr key={task.id} className={cn("hover:bg-muted/30", isSubtask && "bg-muted/10")} onDoubleClick={() => {
-        if (isAdmin || isProjectExecutor) {
+        if (isAdmin) {
           setAdminEditTask(task);
           setAdminEditDialogOpen(true);
         }
@@ -1243,10 +1319,12 @@ export function SpreadsheetGantt({
           </thead>
           <tbody>
             {/* Grouped tasks by phase - Notion style */}
-            {Object.entries(groupedTasks.groups).map(([phase, phaseTasks]) => {
+            {groupedTasks.orderedPhases.map((phase) => {
+              const phaseTasks = groupedTasks.groups[phase];
+              if (!phaseTasks) return null;
               const isCollapsed = collapsedPhases.has(phase);
               const stats = getPhaseStats(phaseTasks);
-              const phaseColor = phaseColors[phase.toLowerCase()] || 'bg-primary';
+              const phaseColor = getPhaseColor(phase);
               
               return (
                 <React.Fragment key={`phase-${phase}`}>
@@ -1281,6 +1359,20 @@ export function SpreadsheetGantt({
                           </div>
                           <span className="text-muted-foreground text-[10px]">{stats.avgProgress}%</span>
                         </div>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary hover:bg-primary/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddTaskToPhase(phase);
+                            }}
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Tambah Task
+                          </Button>
+                        )}
                         {isEditMode && canEdit && (
                           <Button
                             variant="ghost"
@@ -1312,6 +1404,25 @@ export function SpreadsheetGantt({
                       </React.Fragment>
                     );
                   })}
+                  {/* Inline "Add Task" row at end of phase (visible when expanded & editable) */}
+                  {!isCollapsed && canEdit && (
+                    <tr className="hover:bg-muted/30 transition-colors">
+                      <td
+                        colSpan={11 + days.length}
+                        className="sticky left-0 z-10 border-b border-border px-2 py-1.5"
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleAddTaskToPhase(phase)}
+                          className="h-7 text-xs text-muted-foreground hover:text-foreground gap-1.5 ml-6"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Tambah task pada fase ini
+                        </Button>
+                      </td>
+                    </tr>
+                  )}
                 </React.Fragment>
               );
             })}
@@ -1485,6 +1596,3 @@ export function SpreadsheetGantt({
 
   return ganttContent;
 }
-
-// Need to import React for Fragment
-import React from 'react';

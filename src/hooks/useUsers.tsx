@@ -140,19 +140,12 @@ export function useUsers() {
 
   const deleteUser = async (userId: string) => {
     try {
-      // Delete user role first
-      await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
-
-      // Delete profile
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       await fetchUsers();
       return { success: true };
@@ -160,7 +153,10 @@ export function useUsers() {
       if (import.meta.env.DEV) {
         console.error('Error deleting user:', error);
       }
-      return { success: false };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
   };
 

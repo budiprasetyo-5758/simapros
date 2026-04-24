@@ -9,11 +9,13 @@ import { useProjects, useGanttTasks } from '@/hooks/useProjects';
 import { SpreadsheetGantt } from '@/components/project/SpreadsheetGantt';
 import { cn } from '@/lib/utils';
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: 'Menunggu', className: 'bg-muted text-muted-foreground' },
-  approved: { label: 'Aktif', className: 'bg-success/10 text-success border-success/20' },
+  approved: { label: 'Disetujui', className: 'bg-success/10 text-success border-success/20' },
+  active: { label: 'Aktif', className: 'bg-primary/10 text-primary border-primary/20' },
   rejected: { label: 'Ditolak', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   revision: { label: 'Revisi', className: 'bg-revision/10 text-revision border-revision/20' },
+  pending_creation: { label: 'Menunggu Pembuatan', className: 'bg-warning/10 text-warning border-warning/20' }
 };
 
 const priorityConfig = {
@@ -96,11 +98,11 @@ export default function GanttFullscreen() {
             </Button>
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                <Badge variant="outline" className={cn('text-xs shrink-0', statusConfig[project.status].className)}>
-                  {statusConfig[project.status].label}
+                <Badge variant="outline" className={cn('text-xs shrink-0', statusConfig[project.status]?.className || 'bg-muted text-muted-foreground')}>
+                  {statusConfig[project.status]?.label || project.status}
                 </Badge>
-                <Badge variant="outline" className={cn('text-xs shrink-0', priorityConfig[project.priority].className)}>
-                  {priorityConfig[project.priority].label}
+                <Badge variant="outline" className={cn('text-xs shrink-0', priorityConfig[project.priority]?.className || 'bg-muted text-muted-foreground')}>
+                  {priorityConfig[project.priority]?.label || project.priority || 'Tidak Ada'}
                 </Badge>
               </div>
               <h1 className="text-lg font-bold text-foreground truncate">{project.title}</h1>

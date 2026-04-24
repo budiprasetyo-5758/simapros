@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Project, ProjectPriority } from '@/types/project';
-import { Urgency, Impact, calculatePriority, impactOptions, priorityConfig as matrixPriorityConfig } from '@/lib/priorityMatrix';
+import { PriorityMatrixSelector } from '@/components/project/PriorityMatrixSelector';
+import { Urgency, Impact, calculatePriority, priorityConfig as matrixPriorityConfig } from '@/lib/priorityMatrix';
 import { format, parseISO } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -46,6 +46,7 @@ export function ProjectEvaluationDialog({
   const [editedTitle, setEditedTitle] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
   const [editedUnit, setEditedUnit] = useState('');
+  const [urgency, setUrgency] = useState<Urgency>('medium');
   const [impact, setImpact] = useState<Impact>('minor');
   const [editedStartDate, setEditedStartDate] = useState('');
   const [editedEndDate, setEditedEndDate] = useState('');
@@ -64,9 +65,11 @@ export function ProjectEvaluationDialog({
       setEditedTitle(project.title);
       setEditedDescription(project.description);
       setEditedUnit(project.unit);
-      // Parse impact from project or set defaults
+      // Parse urgency and impact from project or set defaults
+      setUrgency((project as any).urgency || 'medium');
       setImpact((project as any).impact || 'minor');
       setEditedStartDate(project.start_date || '');
+      setEditedEndDate(project.end_date || '');
       setEditedEndDate(project.end_date || '');
       setTechnicalNotes('');
       setRevisionNote('');
@@ -83,20 +86,20 @@ export function ProjectEvaluationDialog({
         editedTitle !== project.title ||
         editedDescription !== project.description ||
         editedUnit !== project.unit ||
+        urgency !== ((project as any).urgency || 'medium') ||
         impact !== ((project as any).impact || 'minor') ||
         editedStartDate !== (project.start_date || '') ||
         editedEndDate !== (project.end_date || '');
       setHasEdits(changed);
     }
-  }, [project, editedTitle, editedDescription, editedUnit, impact, editedStartDate, editedEndDate]);
+  }, [project, editedTitle, editedDescription, editedUnit, urgency, impact, editedStartDate, editedEndDate]);
 
   const handleApprove = async () => {
     if (!project) return;
     setIsSubmitting(true);
     try {
-      // Calculate priority from matrix using default urgency (executor will set it later)
-      const defaultUrgency: Urgency = 'medium';
-      const calculatedPriority = calculatePriority(defaultUrgency, impact);
+      // Calculate priority from matrix
+      const calculatedPriority = calculatePriority(urgency, impact);
       // Map critical to urgent for database compatibility
       const dbPriority = calculatedPriority === 'critical' ? 'urgent' : calculatedPriority;
       
@@ -105,7 +108,6 @@ export function ProjectEvaluationDialog({
         description: editedDescription,
         unit: editedUnit,
         priority: dbPriority as ProjectPriority,
-        impact: impact,
         start_date: editedStartDate,
         end_date: editedEndDate,
       };
@@ -216,7 +218,7 @@ export function ProjectEvaluationDialog({
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Paperclip className="w-4 h-4" />
-                      File User Requirement
+                      Lampiran Dokumen
                     </Label>
                     <div className="mt-2">
                       {isImageUrl(project.attachment_url) ? (
@@ -229,7 +231,7 @@ export function ProjectEvaluationDialog({
                           <div className="relative group">
                             <img 
                               src={project.attachment_url} 
-                              alt="File User Requirement" 
+                              alt="Lampiran Proyek" 
                               className="max-w-full max-h-64 rounded-lg border object-contain hover:opacity-90 transition-opacity cursor-pointer"
                             />
                             <div className="absolute inset-0 flex items-center justify-center bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
@@ -248,7 +250,7 @@ export function ProjectEvaluationDialog({
                           className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
                         >
                           <FileText className="w-4 h-4" />
-                          <span>Lihat File User Requirement</span>
+                          <span>Lihat Dokumen Lampiran</span>
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}
@@ -295,36 +297,15 @@ export function ProjectEvaluationDialog({
                   />
                 </div>
 
-                {/* Impact Selector - Super Admin sets Impact only */}
+                {/* Priority Matrix - Super Admin only */}
                 <div className="md:col-span-2">
-                  <Label className="mb-2 block">Impact Proyek</Label>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Tentukan level dampak (impact) proyek ini. Emergency Effort (urgensi) akan ditentukan oleh Eksekutor setelah proyek disetujui.
-                  </p>
-                  <Select value={impact} onValueChange={(v) => setImpact(v as Impact)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih impact" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {impactOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2 mt-2 p-2 bg-muted/50 rounded-lg">
-                    <span className="text-xs text-muted-foreground">Prioritas sementara (default urgensi Sedang):</span>
-                    {(() => {
-                      const calc = calculatePriority('medium', impact);
-                      const info = matrixPriorityConfig[calc];
-                      return (
-                        <Badge variant="outline" className={cn('text-xs', info.className)}>
-                          {info.label}
-                        </Badge>
-                      );
-                    })()}
-                  </div>
+                  <Label className="mb-2 block">Penentuan Prioritas (Urgensi x Impact)</Label>
+                  <PriorityMatrixSelector
+                    urgency={urgency}
+                    impact={impact}
+                    onUrgencyChange={setUrgency}
+                    onImpactChange={setImpact}
+                  />
                 </div>
 
                 <div>
@@ -377,7 +358,7 @@ export function ProjectEvaluationDialog({
               {hasEdits && (
                 <div className="bg-warning/10 border border-warning/20 rounded-lg p-3">
                   <p className="text-sm text-warning font-medium">
-                    ⚠️ Anda telah mengubah data pengajuan. Perubahan ini akan diterapkan saat menyetujui.
+                    Anda telah mengubah data pengajuan. Perubahan ini akan diterapkan saat menyetujui.
                   </p>
                 </div>
               )}

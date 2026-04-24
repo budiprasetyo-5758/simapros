@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SimpleLayout } from "@/components/layout/SimpleLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
@@ -149,7 +149,7 @@ export default function Index() {
   };
 
   const stats = {
-    // Only count approved/active projects in total — pending, rejected, and revision are excluded
+    // Only count approved/active projects in total â€” pending, rejected, and revision are excluded
     total: displayProjects.filter((p) => p.status === "approved" || p.status === "active").length,
     approved: displayProjects.filter((p) => p.status === "approved" || p.status === "active").length,
     pending: displayProjects.filter((p) => p.status === "pending" || p.status === "pending_creation").length,

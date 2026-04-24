@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,8 @@ const phaseOptions = [
   { value: 'followup', label: 'Tindak Lanjut' },
 ];
 
+const CUSTOM_PHASE_VALUE = '__custom__';
+
 export function AddPhaseDialog({
   open,
   onClose,
@@ -50,17 +52,30 @@ export function AddPhaseDialog({
     status: 'not_started' as TaskStatus,
     monev: '',
   });
+  const [customPhaseName, setCustomPhaseName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter out existing phases
+  // Filter out existing phases (preset only); custom option is always available
   const availablePhases = phaseOptions.filter(p => !existingPhases.includes(p.value));
 
+  const isCustomSelected = formData.phase === CUSTOM_PHASE_VALUE;
+  const trimmedCustom = customPhaseName.trim();
+  const customDuplicate = isCustomSelected && trimmedCustom.length > 0 &&
+    existingPhases.some(p => p.toLowerCase() === trimmedCustom.toLowerCase());
+
+  const canSubmit =
+    !!formData.phase &&
+    !!formData.name.trim() &&
+    (!isCustomSelected || (trimmedCustom.length > 0 && !customDuplicate));
+
   const handleSubmit = async () => {
-    if (!formData.phase || !formData.name.trim()) return;
-    
+    if (!canSubmit) return;
+
+    const phaseToSubmit = isCustomSelected ? trimmedCustom : formData.phase;
+
     setIsSubmitting(true);
     try {
-      const result = await onSubmit(formData);
+      const result = await onSubmit({ ...formData, phase: phaseToSubmit });
       if (result.success) {
         setFormData({
           phase: '',
@@ -72,6 +87,7 @@ export function AddPhaseDialog({
           status: 'not_started',
           monev: '',
         });
+        setCustomPhaseName('');
         onClose();
       }
     } finally {
@@ -97,23 +113,40 @@ export function AddPhaseDialog({
             <Label htmlFor="phase">Fase *</Label>
             <Select 
               value={formData.phase} 
-              onValueChange={(v) => setFormData({ ...formData, phase: v })}
+              onValueChange={(v) => {
+                setFormData({ ...formData, phase: v });
+                if (v !== CUSTOM_PHASE_VALUE) setCustomPhaseName('');
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Pilih fase" />
               </SelectTrigger>
               <SelectContent>
-                {availablePhases.length > 0 ? (
-                  availablePhases.map(p => (
-                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
-                  ))
-                ) : (
-                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-                    Semua fase sudah ada
-                  </div>
-                )}
+                {availablePhases.map(p => (
+                  <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                ))}
+                <SelectItem value={CUSTOM_PHASE_VALUE}>Tambahkan Fase Anda</SelectItem>
               </SelectContent>
             </Select>
+            {isCustomSelected && (
+              <div className="grid gap-1 mt-1">
+                <Input
+                  autoFocus
+                  value={customPhaseName}
+                  onChange={(e) => setCustomPhaseName(e.target.value)}
+                  placeholder="Masukkan nama fase custom"
+                  maxLength={60}
+                />
+                {customDuplicate && (
+                  <p className="text-xs text-destructive">
+                    Nama fase sudah digunakan pada proyek ini
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Fase baru akan ditempatkan di urutan terakhir Gantt Chart
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-2">
@@ -209,7 +242,7 @@ export function AddPhaseDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || !formData.phase || !formData.name.trim() || availablePhases.length === 0}
+            disabled={isSubmitting || !canSubmit}
           >
             {isSubmitting ? 'Menyimpan...' : 'Tambah Fase'}
           </Button>

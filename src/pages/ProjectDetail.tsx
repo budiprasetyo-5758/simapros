@@ -36,11 +36,13 @@ import { useTaskEditRequests } from '@/hooks/useTaskEditRequests';
 import { Urgency, Impact, calculatePriority, urgencyOptions, impactOptions, priorityConfig as matrixPriorityConfig } from '@/lib/priorityMatrix';
 import { cn } from '@/lib/utils';
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: 'Menunggu', className: 'bg-muted text-muted-foreground' },
-  approved: { label: 'Aktif', className: 'bg-success/10 text-success border-success/20' },
+  approved: { label: 'Disetujui', className: 'bg-success/10 text-success border-success/20' },
+  active: { label: 'Aktif', className: 'bg-primary/10 text-primary border-primary/20' },
   rejected: { label: 'Ditolak', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   revision: { label: 'Revisi', className: 'bg-revision/10 text-revision border-revision/20' },
+  pending_creation: { label: 'Menunggu Pembuatan', className: 'bg-warning/10 text-warning border-warning/20' }
 };
 
 const priorityConfig = {
@@ -305,15 +307,15 @@ export default function ProjectDetail() {
           </Button>
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <Badge variant="outline" className={cn('text-xs', statusConfig[project.status].className)}>
-                {statusConfig[project.status].label}
+              <Badge variant="outline" className={cn('text-xs', statusConfig[project.status]?.className || 'bg-muted text-muted-foreground')}>
+                {statusConfig[project.status]?.label || project.status}
               </Badge>
               {/* Emergency Effort - Editable by Project Executor */}
               {(project.status === 'approved' || project.status === 'active') && (
                 isExecutorViewing ? (
                   <Select value={(project as any).urgency || 'medium'} onValueChange={(v) => handleUpdateUrgency(v)}>
                     <SelectTrigger className="h-6 w-auto gap-1 px-2 text-xs border-dashed">
-                      <span className={cn('font-medium')}>⚡ {urgencyConfig[(project as any).urgency || 'medium']?.label || 'Sedang'}</span>
+                      <span className={cn('font-medium')}>{urgencyConfig[(project as any).urgency || 'medium']?.label || 'Sedang'}</span>
                     </SelectTrigger>
                     <SelectContent>
                       {urgencyOptions.map(opt => (
@@ -323,7 +325,7 @@ export default function ProjectDetail() {
                   </Select>
                 ) : (project as any).urgency ? (
                   <Badge variant="outline" className={cn('text-xs', urgencyConfig[(project as any).urgency]?.className || '')}>
-                    ⚡ {urgencyConfig[(project as any).urgency]?.label || (project as any).urgency}
+                    {urgencyConfig[(project as any).urgency]?.label || (project as any).urgency}
                   </Badge>
                 ) : null
               )}
@@ -332,7 +334,7 @@ export default function ProjectDetail() {
                 isSuperAdmin ? (
                   <Select value={(project as any).impact || 'minor'} onValueChange={(v) => handleUpdateImpact(v)}>
                     <SelectTrigger className="h-6 w-auto gap-1 px-2 text-xs border-dashed">
-                      <span className={cn('font-medium')}>🎯 {impactConfig[(project as any).impact || 'minor']?.label || 'Minor'}</span>
+                      <span className={cn('font-medium')}>{impactConfig[(project as any).impact || 'minor']?.label || 'Minor'}</span>
                     </SelectTrigger>
                     <SelectContent>
                       {impactOptions.map(opt => (
@@ -342,7 +344,7 @@ export default function ProjectDetail() {
                   </Select>
                 ) : (project as any).impact ? (
                   <Badge variant="outline" className={cn('text-xs', impactConfig[(project as any).impact]?.className || '')}>
-                    🎯 {impactConfig[(project as any).impact]?.label || (project as any).impact}
+                    {impactConfig[(project as any).impact]?.label || (project as any).impact}
                   </Badge>
                 ) : null
               )}
@@ -355,16 +357,16 @@ export default function ProjectDetail() {
                   );
                   const info = matrixPriorityConfig[calc];
                   return (
-                    <Badge variant="outline" className={cn('text-xs', info.className)}>
-                      Prioritas: {info.label}
+                    <Badge variant="outline" className={cn('text-xs', info?.className || 'bg-muted text-muted-foreground')}>
+                      Prioritas: {info?.label || calc}
                     </Badge>
                   );
                 })()
               )}
               {/* Fallback: show old priority if no urgency/impact set yet */}
               {(project.status !== 'approved' && project.status !== 'active') && (
-                <Badge variant="outline" className={cn('text-xs', priorityConfig[project.priority].className)}>
-                  {priorityConfig[project.priority].label}
+                <Badge variant="outline" className={cn('text-xs', priorityConfig[project.priority]?.className || 'bg-muted text-muted-foreground')}>
+                  {priorityConfig[project.priority]?.label || project.priority || 'Tidak Ada'}
                 </Badge>
               )}
               {/* Progress Status Badge/Selector */}

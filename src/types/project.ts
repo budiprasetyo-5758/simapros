@@ -1,4 +1,4 @@
-export type ProjectStatus = 'pending' | 'approved' | 'rejected' | 'revision' | 'active' | 'pending_creation';
+﻿export type ProjectStatus = 'pending' | 'approved' | 'rejected' | 'revision' | 'active' | 'pending_creation';
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStage = 'planning' | 'execution' | 'evaluation' | 'followup';
 export type ProjectImpact = 'low' | 'medium' | 'high' | 'critical';

@@ -223,10 +223,13 @@ export function useProjects() {
 
       await fetchProjects();
       return { success: true };
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error updating project:', error);
-      }
+    } catch (error: any) {
+      console.error('Error updating project:', error);
+      toast({
+        title: 'Gagal Memperbarui Proyek',
+        description: error?.message || 'Terjadi kesalahan saat memperbarui data proyek.',
+        variant: 'destructive',
+      });
       return { success: false };
     }
   };
@@ -347,6 +350,7 @@ export function useProjects() {
   };
 }
 
+
 export function useGanttTasks(projectId: string) {
   const [tasks, setTasks] = useState<GanttTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,7 +361,7 @@ export function useGanttTasks(projectId: string) {
         .from('gantt_tasks')
         .select('*')
         .eq('project_id', projectId)
-        .order('start_date', { ascending: true });
+        .order('wbs_number', { ascending: true, nullsFirst: false });
 
       if (error) throw error;
 
@@ -375,6 +379,7 @@ export function useGanttTasks(projectId: string) {
         monev: task.monev || '',
         phase: task.phase || '',
         parent_task_id: (task as unknown as { parent_task_id?: string | null }).parent_task_id || null,
+        created_at: (task as unknown as { created_at?: string }).created_at,
       }));
       setTasks(mappedTasks);
     } catch (error) {
