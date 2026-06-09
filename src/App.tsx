@@ -16,15 +16,18 @@ import UserManagement from "./pages/UserManagement";
 import EditProfile from "./pages/EditProfile";
 import EditRequestsQueue from "./pages/EditRequestsQueue";
 import AdminSubmitProject from "./pages/AdminSubmitProject";
-import WeeklyReport from "./pages/WeeklyReport";
+import ManualWeeklyReport from "./pages/ManualWeeklyReport";
 import NotificationSettings from "./pages/NotificationSettings";
 import MasterKategoriProyek from "./pages/MasterKategoriProyek";
 import MasterUnitKerja from "./pages/MasterUnitKerja";
+import MasterPIC from "./pages/MasterPIC";
 import UnitKerjaRequests from "./pages/UnitKerjaRequests";
 import VerificationPending from "./pages/VerificationPending";
 import Timeline from "./pages/Timeline";
 import FollowUp from "./pages/FollowUp";
 import FollowUpCategory from "./pages/FollowUpCategory";
+import PublicMonitoring from "./pages/PublicMonitoring";
+import PublicMonitoringProject from "./pages/PublicMonitoringProject";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,14 +53,17 @@ const App = () => (
             <Route path="/profile" element={<EditProfile />} />
             <Route path="/edit-requests" element={<EditRequestsQueue />} />
             <Route path="/admin-submit" element={<AdminSubmitProject />} />
-            <Route path="/weekly-report" element={<WeeklyReport />} />
+            <Route path="/weekly-report" element={<ManualWeeklyReport />} />
             <Route path="/notification-settings" element={<NotificationSettings />} />
             <Route path="/master-kategori" element={<MasterKategoriProyek />} />
             <Route path="/master-unit-kerja" element={<MasterUnitKerja />} />
+            <Route path="/master-pic" element={<MasterPIC />} />
             <Route path="/unit-kerja-requests" element={<UnitKerjaRequests />} />
             <Route path="/timeline" element={<Timeline />} />
             <Route path="/follow-up" element={<FollowUp />} />
             <Route path="/follow-up/:category" element={<FollowUpCategory />} />
+            <Route path="/monitor/:token" element={<PublicMonitoring />} />
+            <Route path="/monitor/:token/project/:projectId" element={<PublicMonitoringProject />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

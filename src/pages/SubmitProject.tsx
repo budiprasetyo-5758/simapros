@@ -15,6 +15,7 @@ import { SimpleLayout } from '@/components/layout/SimpleLayout';
 import { validateProjectForm } from '@/lib/validations/project';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import { Urgency, urgencyOptions } from '@/lib/priorityMatrix';
 
 export default function SubmitProject() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function SubmitProject() {
     start_date: format(new Date(), 'yyyy-MM-dd'), // Auto-fill with today
     end_date: '',
     master_proyek_id: '',
+    urgency: 'medium' as Urgency,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -161,6 +163,7 @@ export default function SubmitProject() {
       status: 'pending',
       project_stage: 'planning',
       attachment_url: attachmentUrl,
+      urgency: formData.urgency,
     }]);
 
     setIsSubmitting(false);
@@ -287,6 +290,25 @@ export default function SubmitProject() {
                 />
                 {errors.end_date && <p className="text-sm text-destructive">{errors.end_date}</p>}
               </div>
+            </div>
+
+            {/* Urgency Effort */}
+            <div className="space-y-2">
+              <Label htmlFor="urgency" className="text-base">Emergency Effort / Tingkat Urgensi *</Label>
+              <Select
+                value={formData.urgency}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, urgency: value as Urgency }))}
+              >
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Pilih tingkat urgensi" />
+                </SelectTrigger>
+                <SelectContent>
+                  {urgencyOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Seberapa mendesak proyek ini perlu ditangani</p>
             </div>
 
             <div className="space-y-2">

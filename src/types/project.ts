@@ -1,4 +1,4 @@
-﻿export type ProjectStatus = 'pending' | 'approved' | 'rejected' | 'revision' | 'active' | 'pending_creation';
+export type ProjectStatus = 'pending' | 'approved' | 'rejected' | 'revision' | 'active' | 'pending_creation';
 export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type ProjectStage = 'planning' | 'execution' | 'evaluation' | 'followup';
 export type ProjectImpact = 'low' | 'medium' | 'high' | 'critical';
@@ -6,6 +6,16 @@ export type ProjectProgressStatus = 'in_progress' | 'on_hold' | 'completed';
 export type AppRole = 'super_admin' | 'admin' | 'project_executor' | 'user';
 
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'pending';
+
+export interface ProjectObstacle {
+  id: string;
+  project_id: string;
+  note: string;
+  is_resolved: boolean;
+  created_at: string;
+  created_by?: string | null;
+  updated_at: string;
+}
 
 export interface GanttTask {
   id: string;
@@ -62,6 +72,8 @@ export interface Project {
   attachment_url?: string | null;
   progress_status?: ProjectProgressStatus;
    monev_summary?: string | null;
+  pic?: string | null;
+  project_obstacles?: ProjectObstacle[];
   created_at: string;
   updated_at: string;
 }

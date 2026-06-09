@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { FileText, Sparkles, Edit2, Save, X, Loader2 } from 'lucide-react';
+import { FileText, Edit2, Save, X, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { GanttTask, Project } from '@/types/project';
@@ -17,7 +17,6 @@ interface MonevSummarySectionProps {
 export function MonevSummarySection({ project, tasks, isSuperAdmin, onUpdate }: MonevSummarySectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(project.monev_summary || '');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -49,48 +48,6 @@ export function MonevSummarySection({ project, tasks, isSuperAdmin, onUpdate }: 
     }
   };
 
-  const handleGenerateAI = async () => {
-    setIsGenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-monev-summary', {
-        body: {
-          project_id: project.id,
-          project_title: project.title,
-          project_description: project.description,
-          project_stage: project.project_stage,
-          progress_status: project.progress_status,
-          tasks: tasks.map(t => ({
-            name: t.name,
-            phase: t.phase,
-            status: t.status,
-            progress: t.progress,
-            monev: t.monev,
-            start_date: t.start_date,
-            end_date: t.end_date,
-          })),
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.summary) {
-        setEditValue(data.summary);
-        // Auto-save and send notification
-        await saveMonev(data.summary);
-        await sendMonevNotification(data.summary);
-      }
-    } catch (error) {
-      console.error('Error generating monev:', error);
-      toast({
-        title: 'Error',
-        description: 'Gagal generate rangkuman monev. Silakan coba lagi.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsGenerating(false);
-    }
-  };
- 
    const saveMonev = async (value: string) => {
      setIsSaving(true);
      try {
@@ -119,8 +76,9 @@ export function MonevSummarySection({ project, tasks, isSuperAdmin, onUpdate }: 
      }
    };
  
-   const handleSave = () => {
-     saveMonev(editValue);
+   const handleSave = async () => {
+     await saveMonev(editValue);
+     await sendMonevNotification(editValue);
    };
  
    const handleCancel = () => {
@@ -156,31 +114,15 @@ export function MonevSummarySection({ project, tasks, isSuperAdmin, onUpdate }: 
          </CardTitle>
          <div className="flex gap-2">
            {!isEditing && (
-             <>
-               <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={handleGenerateAI}
-                 disabled={isGenerating || tasks.length === 0}
-                 className="gap-2"
-               >
-                 {isGenerating ? (
-                   <Loader2 className="w-4 h-4 animate-spin" />
-                 ) : (
-                   <Sparkles className="w-4 h-4" />
-                 )}
-                 {isGenerating ? 'Generating...' : 'Generate AI'}
-               </Button>
-               <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={() => setIsEditing(true)}
-                 className="gap-2"
-               >
-                 <Edit2 className="w-4 h-4" />
-                 Edit
-               </Button>
-             </>
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={() => setIsEditing(true)}
+               className="gap-2"
+             >
+               <Edit2 className="w-4 h-4" />
+               Edit
+             </Button>
            )}
            {isEditing && (
              <>
@@ -223,7 +165,7 @@ export function MonevSummarySection({ project, tasks, isSuperAdmin, onUpdate }: 
            <div className="text-center py-8 text-muted-foreground">
              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
              <p>Belum ada rangkuman monev.</p>
-             <p className="text-sm mt-1">Klik "Generate AI" untuk membuat rangkuman otomatis atau "Edit" untuk menulis manual.</p>
+             <p className="text-sm mt-1">Klik "Edit" untuk menulis rangkuman monitoring dan evaluasi.</p>
            </div>
          )}
        </CardContent>

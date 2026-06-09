@@ -7,15 +7,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { GanttTask } from '@/types/project';
-import { Loader2, AlertCircle, Bot, User } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 interface ProgressOverrideDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: GanttTask | null;
-  aiProgress?: number;
-  aiReasoning?: string;
   onProgressUpdated: () => void;
 }
 
@@ -23,8 +20,6 @@ export function ProgressOverrideDialog({
   open,
   onOpenChange,
   task,
-  aiProgress,
-  aiReasoning,
   onProgressUpdated
 }: ProgressOverrideDialogProps) {
   const [progress, setProgress] = useState<number>(task?.progress || 0);
@@ -71,45 +66,7 @@ export function ProgressOverrideDialog({
     }
   };
 
-  const handleResetToAI = async () => {
-    if (!task || aiProgress === undefined) return;
-
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('gantt_tasks')
-        .update({
-          progress: aiProgress,
-          progress_override: null,
-          progress_override_by: null,
-          progress_override_at: null,
-        })
-        .eq('id', task.id);
-
-      if (error) throw error;
-
-      toast({
-        title: 'Progress Direset',
-        description: `Progress dikembalikan ke hasil AI (${aiProgress}%)`,
-      });
-
-      onOpenChange(false);
-      onProgressUpdated();
-    } catch (error) {
-      console.error('Error resetting progress:', error);
-      toast({
-        title: 'Error',
-        description: 'Gagal mereset progress',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (!task) return null;
-
-  const hasOverride = task.progress !== aiProgress && aiProgress !== undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,7 +74,7 @@ export function ProgressOverrideDialog({
         <DialogHeader>
           <DialogTitle>Override Progress Task</DialogTitle>
           <DialogDescription>
-            Modifikasi progress yang dihitung AI jika tidak sesuai kondisi sebenarnya
+            Ubah progress task secara manual jika tidak sesuai kondisi sebenarnya
           </DialogDescription>
         </DialogHeader>
 
@@ -128,32 +85,13 @@ export function ProgressOverrideDialog({
             <p className="text-sm text-muted-foreground">{task.wbs_number}</p>
           </div>
 
-          {/* AI Progress */}
-          {aiProgress !== undefined && (
-            <div className="p-3 border rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-primary" />
-                <span className="font-medium">Penilaian AI</span>
-                <Badge variant="secondary">{aiProgress}%</Badge>
-              </div>
-              {aiReasoning && (
-                <p className="text-sm text-muted-foreground">{aiReasoning}</p>
-              )}
-            </div>
-          )}
-
           {/* Current Progress */}
-          {hasOverride && (
-            <div className="p-3 border border-yellow-500/50 rounded-lg bg-yellow-500/10">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-yellow-600" />
-                <span className="font-medium text-yellow-700">Progress saat ini (Override)</span>
-                <Badge variant="outline" className="border-yellow-500 text-yellow-700">
-                  {task.progress}%
-                </Badge>
-              </div>
+          <div className="p-3 border rounded-lg">
+            <div className="flex items-center gap-2">
+              <span className="font-medium">Progress Saat Ini</span>
+              <span className="text-sm text-muted-foreground">{task.progress}%</span>
             </div>
-          )}
+          </div>
 
           {/* Override Input */}
           <div className="space-y-2">
@@ -193,17 +131,12 @@ export function ProgressOverrideDialog({
           <div className="flex items-start gap-2 p-3 bg-yellow-500/10 rounded-lg text-sm">
             <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
             <p className="text-yellow-700">
-              Override akan mengganti progress dari AI. Anda dapat mengembalikan ke nilai AI kapan saja.
+              Override akan mengganti progress yang tercatat. Pastikan nilai progress sesuai dengan kondisi sebenarnya.
             </p>
           </div>
         </div>
 
         <DialogFooter className="gap-2">
-          {hasOverride && aiProgress !== undefined && (
-            <Button variant="outline" onClick={handleResetToAI} disabled={isSubmitting}>
-              Reset ke AI ({aiProgress}%)
-            </Button>
-          )}
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Batal
           </Button>

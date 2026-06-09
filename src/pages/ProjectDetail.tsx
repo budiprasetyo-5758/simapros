@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
-import { ArrowLeft, Building2, User, Calendar, Edit2, Save, X, Send, Trash2, Sparkles, FileText, Bot, Users, Paperclip, ExternalLink, PlayCircle, PauseCircle, CheckCircle2, Bell } from 'lucide-react';
+import { ArrowLeft, Building2, User, UserCheck, Calendar, Edit2, Save, X, Send, Trash2, FileText, Users, Paperclip, ExternalLink, PlayCircle, PauseCircle, CheckCircle2, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import { SimpleLayout } from '@/components/layout/SimpleLayout';
 import { PhaseProgress } from '@/components/project/PhaseProgress';
 import { ConfirmChangeDialog } from '@/components/project/ConfirmChangeDialog';
 import { SpreadsheetGantt } from '@/components/project/SpreadsheetGantt';
-import { TaskSuggestionDialog } from '@/components/ai/TaskSuggestionDialog';
+
 import { DailyReportDialog } from '@/components/project/DailyReportDialog';
 import { DailyReportsView } from '@/components/project/DailyReportsView';
 import { ProgressOverrideDialog } from '@/components/project/ProgressOverrideDialog';
@@ -31,10 +31,12 @@ import { ProjectMeetingsSection } from '@/components/project/ProjectMeetingsSect
 import { UserEditRequestDialog } from '@/components/project/UserEditRequestDialog';
 import { useProjectUnitKerjaAssignments } from '@/hooks/useProjectUnitKerjaAssignments';
 import { MonevSummarySection } from '@/components/project/MonevSummarySection';
+import { KendalaSection } from '@/components/project/KendalaSection';
 import { Project, ProjectStage, ProjectPriority, StageNotes, GanttTask, ProjectProgressStatus } from '@/types/project';
 import { useTaskEditRequests } from '@/hooks/useTaskEditRequests';
 import { Urgency, Impact, calculatePriority, urgencyOptions, impactOptions, priorityConfig as matrixPriorityConfig } from '@/lib/priorityMatrix';
 import { cn } from '@/lib/utils';
+import { usePicOptions } from '@/hooks/usePicOptions';
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   pending: { label: 'Menunggu', className: 'bg-muted text-muted-foreground' },
@@ -81,9 +83,10 @@ export default function ProjectDetail() {
   const { isAssigned, loading: assignmentLoading } = useIsAssignedToProject(id);
   const { createNewTaskRequest } = useTaskEditRequests(id);
 
+  const { activePicOptions } = usePicOptions();
   const [isEditing, setIsEditing] = useState(false);
   const [showEditRequestDialog, setShowEditRequestDialog] = useState(false);
-  const [showAISuggestionDialog, setShowAISuggestionDialog] = useState(false);
+
   const [showDailyReportDialog, setShowDailyReportDialog] = useState(false);
   const [showProgressOverrideDialog, setShowProgressOverrideDialog] = useState(false);
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
@@ -95,6 +98,7 @@ export default function ProjectDetail() {
     title: '',
     description: '',
     unit: '',
+    pic: '' as string,
     start_date: null as Date | null,
     end_date: null as Date | null,
   });
@@ -125,6 +129,7 @@ export default function ProjectDetail() {
         title: project.title,
         description: project.description,
         unit: project.unit,
+        pic: project.pic || '',
         start_date: project.start_date ? parseISO(project.start_date) : null,
         end_date: project.end_date ? parseISO(project.end_date) : null,
       });
@@ -184,6 +189,7 @@ export default function ProjectDetail() {
           title: editForm.title.trim(),
           description: editForm.description.trim(),
           unit: editForm.unit.trim(),
+          pic: editForm.pic || null,
         };
         if (editForm.start_date) updates.start_date = format(editForm.start_date, 'yyyy-MM-dd');
         if (editForm.end_date) updates.end_date = format(editForm.end_date, 'yyyy-MM-dd');
@@ -471,7 +477,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Project Info Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -505,6 +511,31 @@ export default function ProjectDetail() {
                 <div>
                   <p className="text-sm text-muted-foreground">Pengaju</p>
                   <p className="font-semibold">{project.requester_name}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10"><UserCheck className="w-5 h-5 text-primary" /></div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">PIC</p>
+                  {isEditing ? (
+                    <Select value={editForm.pic || '_none'} onValueChange={(v) => setEditForm(prev => ({ ...prev, pic: v === '_none' ? '' : v }))}>
+                      <SelectTrigger className="h-8 mt-1">
+                        <SelectValue placeholder="Pilih PIC" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Belum ditentukan</SelectItem>
+                        {activePicOptions.map(opt => (
+                          <SelectItem key={opt.name} value={opt.name}>{opt.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="font-semibold">{project.pic || 'Belum ditentukan'}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -642,6 +673,18 @@ export default function ProjectDetail() {
           </Card>
         )}
 
+        {/* Kendala Section - Only for approved projects */}
+        {project.status === 'approved' && (
+          <KendalaSection
+            project={project}
+            isSuperAdmin={isSuperAdmin}
+            isProjectExecutor={isExecutorViewing}
+            onUpdate={() => {
+              window.location.reload();
+            }}
+          />
+        )}
+
         {/* Monev Summary Section - Only for approved projects */}
         {project.status === 'approved' && (
           <MonevSummarySection
@@ -717,13 +760,7 @@ export default function ProjectDetail() {
                         Buat Laporan Harian
                       </Button>
                     )}
-                    {/* Executor or Super Admin: AI Generate Tasks (Manual Only) */}
-                    {(isExecutorViewing || isSuperAdmin) && tasks.length === 0 && project.start_date && project.end_date && (
-                      <Button onClick={() => setShowAISuggestionDialog(true)} variant="outline" className="gap-2">
-                        <Sparkles className="w-4 h-4" />
-                        AI Generate Tasks
-                      </Button>
-                    )}
+
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -749,22 +786,22 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
 
-              {/* Super Admin: Progress Override Section */}
+              {/* Super Admin: Manual Progress Override Section */}
               {isSuperAdmin && tasks.length > 0 && (
                 <Card className="mt-4">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Bot className="w-5 h-5" />
-                      AI Progress & Override
+                      <Edit2 className="w-5 h-5" />
+                      Override Progress
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Klik task untuk melihat penilaian AI dan override progress jika diperlukan.
+                      Klik task untuk mengubah progress secara manual jika diperlukan.
                     </p>
                     <div className="grid gap-2">
                       {tasks.map(task => {
-                        const extendedTask = task as GanttTask & { ai_progress?: number; ai_progress_reasoning?: string; progress_override?: number };
+                        const extendedTask = task as GanttTask & { progress_override?: number };
                         const hasOverride = extendedTask.progress_override !== null && extendedTask.progress_override !== undefined;
                         return (
                           <button
@@ -779,17 +816,9 @@ export default function ProjectDetail() {
                               <span className="text-xs text-muted-foreground">{task.wbs_number}</span>
                               <span className="font-medium">{task.name}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {extendedTask.ai_progress !== undefined && (
-                                <Badge variant="secondary" className="gap-1">
-                                  <Bot className="w-3 h-3" />
-                                  AI: {extendedTask.ai_progress}%
-                                </Badge>
-                              )}
-                              <Badge variant={hasOverride ? "default" : "outline"}>
-                                {hasOverride ? 'Override: ' : 'Progress: '}{task.progress}%
-                              </Badge>
-                            </div>
+                            <Badge variant={hasOverride ? "default" : "outline"}>
+                              {hasOverride ? 'Override: ' : 'Progress: '}{task.progress}%
+                            </Badge>
                           </button>
                         );
                       })}
@@ -849,26 +878,7 @@ export default function ProjectDetail() {
         />
       )}
 
-      {/* AI Task Suggestion Dialog */}
-      {project && project.start_date && project.end_date && (
-        <TaskSuggestionDialog
-          open={showAISuggestionDialog}
-          onClose={() => setShowAISuggestionDialog(false)}
-          projectId={project.id}
-          projectTitle={project.title}
-          projectDescription={project.description}
-          startDate={project.start_date}
-          endDate={project.end_date}
-          masterProyekName={project.master_proyek?.name}
-          isExecutor={isExecutorViewing}
-          onAddTasks={async (tasksToAdd) => {
-            // Both executors and super admin can add tasks directly
-            for (const task of tasksToAdd) {
-              await addTask(task);
-            }
-          }}
-        />
-      )}
+
 
       {/* Daily Report Dialog for Executor */}
       {project && (
@@ -889,10 +899,7 @@ export default function ProjectDetail() {
           open={showProgressOverrideDialog}
           onOpenChange={setShowProgressOverrideDialog}
           task={selectedTaskForOverride}
-          aiProgress={(selectedTaskForOverride as GanttTask & { ai_progress?: number }).ai_progress}
-          aiReasoning={(selectedTaskForOverride as GanttTask & { ai_progress_reasoning?: string }).ai_progress_reasoning}
           onProgressUpdated={() => {
-            // Trigger refetch of tasks would happen automatically via useGanttTasks
             setShowProgressOverrideDialog(false);
             setSelectedTaskForOverride(null);
           }}

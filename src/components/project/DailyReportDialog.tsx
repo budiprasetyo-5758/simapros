@@ -33,7 +33,7 @@ export function DailyReportDialog({
   const [challenges, setChallenges] = useState('');
   const [reportDate, setReportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCalculating, setIsCalculating] = useState(false);
+
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,42 +93,7 @@ export function DailyReportDialog({
     }
   };
 
-  const calculateAIProgress = async (taskId: string) => {
-    setIsCalculating(true);
-    try {
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) return;
 
-      // Fetch all reports for this task
-      const { data: reports, error: reportsError } = await supabase
-        .from('daily_reports')
-        .select('*')
-        .eq('task_id', taskId)
-        .order('report_date', { ascending: true });
-
-      if (reportsError) throw reportsError;
-
-      // Call edge function which handles the progress update with service role
-      const { data, error } = await supabase.functions.invoke('calculate-task-progress', {
-        body: { 
-          task,
-          dailyReports: reports || []
-        }
-      });
-
-      if (error) throw error;
-
-      // Progress update is now handled by the edge function with service role
-      // No need for client-side update which would fail due to RLS
-      
-      return data;
-    } catch (error) {
-      console.error('Error calculating AI progress:', error);
-      throw error;
-    } finally {
-      setIsCalculating(false);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!selectedTaskId || !description.trim()) {
@@ -176,11 +141,10 @@ export function DailyReportDialog({
         throw insertError;
       }
 
-      const progressResult = await calculateAIProgress(selectedTaskId);
 
       toast({
         title: 'Laporan Berhasil Disimpan',
-        description: `AI menghitung progress: ${progressResult?.progress || 0}%`,
+        description: 'Laporan harian berhasil disimpan.',
       });
 
       resetForm();
@@ -209,7 +173,7 @@ export function DailyReportDialog({
             Laporan Harian
           </DialogTitle>
           <DialogDescription>
-            Isi laporan progress harian untuk task yang sedang dikerjakan. AI akan menghitung progress secara otomatis.
+            Isi laporan progress harian untuk task yang sedang dikerjakan.
           </DialogDescription>
         </DialogHeader>
 
@@ -351,12 +315,12 @@ export function DailyReportDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || isCalculating || isUploading || !selectedTaskId || !description.trim()}
+            disabled={isSubmitting || isUploading || !selectedTaskId || !description.trim()}
           >
-            {isSubmitting || isCalculating || isUploading ? (
+            {isSubmitting || isUploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isUploading ? 'Mengunggah...' : isCalculating ? 'Menghitung Progress...' : 'Menyimpan...'}
+                {isUploading ? 'Mengunggah...' : 'Menyimpan...'}
               </>
             ) : (
               'Simpan Laporan'

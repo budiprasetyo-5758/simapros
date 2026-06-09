@@ -96,5 +96,22 @@ export function useMeetingTodos() {
     },
   });
 
-  return { todos, isLoading, createTodo, toggleTodo, deleteTodo, markConverted };
+  const updateTodo = useMutation({
+    mutationFn: async ({ id, title, description }: { id: string; title: string; description?: string }) => {
+      const { error } = await supabase
+        .from('meeting_todos' as any)
+        .update({ title, description: description || null })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-todos'] });
+      toast({ title: 'To-Do berhasil diperbarui' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Gagal memperbarui To-Do', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  return { todos, isLoading, createTodo, toggleTodo, deleteTodo, markConverted, updateTodo };
 }

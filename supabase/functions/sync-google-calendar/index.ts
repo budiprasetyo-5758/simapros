@@ -103,41 +103,59 @@ Deno.serve(async (req) => {
 
     const appUrl = Deno.env.get('APP_URL') || 'https://simapros.my.id';
 
-    // Fetch approved/active projects with dates
-    const { data: projects, error } = await supabase
-      .from('projects')
-      .select('id, title, description, project_stage, priority, start_date, end_date, google_calendar_event_id')
-      .in('status', ['approved', 'active'])
-      .not('start_date', 'is', null)
-      .not('end_date', 'is', null);
+    // Fetch meetings
+    const { data: meetings, error } = await supabase
+      .from('meetings')
+      .select('id, title, description, meeting_date, meeting_time, project_id, google_calendar_event_id')
+      .not('meeting_date', 'is', null);
 
     if (error) throw error;
 
     const calendarApi = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
     let synced = 0;
 
-    for (const project of (projects || [])) {
-      const stageLabels: Record<string, string> = {
-        planning: 'Planning', execution: 'Execution',
-        evaluation: 'Evaluation', followup: 'Follow-up',
-      };
+    for (const meeting of (meetings || [])) {
+      let start, end;
+      
+      if (meeting.meeting_time) {
+        // Has specific time (assume Asia/Jakarta timezone +07:00)
+        // Format: YYYY-MM-DDTHH:MM:SS+07:00
+        const dateTimeStr = `${meeting.meeting_date}T${meeting.meeting_time}+07:00`;
+        start = { dateTime: dateTimeStr, timeZone: 'Asia/Jakarta' };
+        
+        // Add 1 hour for end time
+        const endDate = new Date(new Date(dateTimeStr).getTime() + 60 * 60 * 1000);
+        // Format manually to preserve timezone
+        const endIso = endDate.toISOString(); // e.g. 2023-10-15T03:00:00.000Z
+        // Convert to local +0700 string format? 
+        // Actually, Google Calendar accepts Z format as well, but it's easier to just pass the Date object string and let Google handle it.
+        // Wait, passing it as ISO string with timeZone will work:
+        end = { dateTime: endDate.toISOString(), timeZone: 'Asia/Jakarta' };
+      } else {
+        // All-day event
+        start = { date: meeting.meeting_date };
+        
+        // End date is exclusive in Google Calendar, so add 1 day
+        const nextDay = new Date(new Date(meeting.meeting_date).getTime() + 24 * 60 * 60 * 1000);
+        end = { date: nextDay.toISOString().split('T')[0] };
+      }
 
       const eventBody = {
-        summary: project.title,
+        summary: `Meeting: ${meeting.title}`,
         description: [
-          `Status: ${stageLabels[project.project_stage] || project.project_stage}`,
-          `Priority: ${project.priority}`,
+          meeting.description || '',
           '',
-          `Lihat detail: ${appUrl}/project/${project.id}`,
-        ].join('\n'),
-        start: { date: project.start_date },
-        end: { date: project.end_date },
+          meeting.project_id ? `Project ID: ${meeting.project_id}` : '',
+          `Link: ${appUrl}/timeline`,
+        ].filter(Boolean).join('\n'),
+        start,
+        end,
       };
 
       let res: Response;
-      if (project.google_calendar_event_id) {
+      if (meeting.google_calendar_event_id) {
         // Update existing event
-        res = await fetch(`${calendarApi}/${project.google_calendar_event_id}`, {
+        res = await fetch(`${calendarApi}/${meeting.google_calendar_event_id}`, {
           method: 'PUT',
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -159,20 +177,20 @@ Deno.serve(async (req) => {
 
       if (res.ok) {
         const eventData = await res.json();
-        if (!project.google_calendar_event_id && eventData.id) {
+        if (!meeting.google_calendar_event_id && eventData.id) {
           await supabase
-            .from('projects')
+            .from('meetings')
             .update({ google_calendar_event_id: eventData.id })
-            .eq('id', project.id);
+            .eq('id', meeting.id);
         }
         synced++;
       } else {
         const errText = await res.text();
-        console.error(`Failed to sync project ${project.id}:`, errText);
+        console.error(`Failed to sync meeting ${meeting.id}:`, errText);
       }
     }
 
-    return new Response(JSON.stringify({ synced, total: projects?.length || 0 }), {
+    return new Response(JSON.stringify({ synced, total: meetings?.length || 0 }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

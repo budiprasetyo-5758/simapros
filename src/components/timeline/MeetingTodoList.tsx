@@ -10,13 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { useMeetingTodos } from "@/hooks/useMeetingTodos";
 import { useAuth } from "@/hooks/useAuth";
-import { Plus, Trash2, CalendarPlus, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Trash2, CalendarPlus, ChevronDown, ChevronUp, Edit2, Save, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddMeetingDialog } from "./AddMeetingDialog";
 
 export function MeetingTodoList() {
   const { user } = useAuth();
-  const { todos, isLoading, createTodo, toggleTodo, deleteTodo } = useMeetingTodos();
+  const { todos, isLoading, createTodo, toggleTodo, deleteTodo, updateTodo } = useMeetingTodos();
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -111,6 +111,7 @@ export function MeetingTodoList() {
                   onToggle={() => toggleTodo.mutate({ id: todo.id, is_completed: true })}
                   onDelete={() => deleteTodo.mutate(todo.id)}
                   onConvert={() => setConvertTodo(todo)}
+                  onUpdate={(title, description) => updateTodo.mutate({ id: todo.id, title, description })}
                 />
               ))}
             </div>
@@ -134,6 +135,7 @@ export function MeetingTodoList() {
                       todo={todo}
                       onToggle={() => toggleTodo.mutate({ id: todo.id, is_completed: false })}
                       onDelete={() => deleteTodo.mutate(todo.id)}
+                      onUpdate={(title, description) => updateTodo.mutate({ id: todo.id, title, description })}
                     />
                   ))}
                 </div>
@@ -169,12 +171,64 @@ function TodoItem({
   onToggle,
   onDelete,
   onConvert,
+  onUpdate,
 }: {
   todo: any;
   onToggle: () => void;
   onDelete: () => void;
   onConvert?: () => void;
+  onUpdate: (title: string, description?: string) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(todo.title);
+  const [editDescription, setEditDescription] = useState(todo.description || "");
+
+  const handleSave = () => {
+    if (!editTitle.trim()) return;
+    onUpdate(editTitle.trim(), editDescription.trim());
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditTitle(todo.title);
+    setEditDescription(todo.description || "");
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="rounded-md border border-primary/30 p-3 space-y-3 bg-primary/5">
+        <div>
+          <Label className="text-xs">Judul *</Label>
+          <Input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className="h-8 text-sm"
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            autoFocus
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Deskripsi</Label>
+          <Textarea
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            rows={2}
+            className="text-sm"
+          />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="ghost" size="sm" onClick={handleCancel} className="h-7 text-xs gap-1">
+            <X className="w-3 h-3" /> Batal
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={!editTitle.trim()} className="h-7 text-xs gap-1">
+            <Save className="w-3 h-3" /> Simpan
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -206,6 +260,15 @@ function TodoItem({
             <CalendarPlus className="w-3.5 h-3.5" />
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          title="Edit"
+          onClick={() => setIsEditing(true)}
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePicOptions } from '@/hooks/usePicOptions';
 import { useAuth } from '@/hooks/useAuth';
 import { useMasterProyek } from '@/hooks/useMasterProyek';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +29,10 @@ export default function AdminSubmitProject() {
   const {
     toast
   } = useToast();
+  const {
+    activePicOptions,
+    loading: picLoading
+  } = usePicOptions();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -36,7 +41,8 @@ export default function AdminSubmitProject() {
     start_date: '',
     end_date: '',
     master_proyek_id: '',
-    requester_name: ''
+    requester_name: '',
+    pic: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -68,6 +74,13 @@ export default function AdminSubmitProject() {
       }));
       return;
     }
+    if (!formData.pic) {
+      setErrors(prev => ({
+        ...prev,
+        pic: 'PIC wajib dipilih'
+      }));
+      return;
+    }
     setErrors({});
     setIsSubmitting(true);
     const validatedData = validation.data!;
@@ -87,7 +100,8 @@ export default function AdminSubmitProject() {
       requester_name: formData.requester_name,
       status: 'approved',
       // Langsung approved
-      project_stage: 'planning'
+      project_stage: 'planning',
+      pic: formData.pic
     });
     setIsSubmitting(false);
     if (!error) {
@@ -104,7 +118,7 @@ export default function AdminSubmitProject() {
       });
     }
   };
-  if (authLoading || masterLoading) {
+  if (authLoading || masterLoading || picLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>;
@@ -145,6 +159,22 @@ export default function AdminSubmitProject() {
             }))} className={`h-12 text-base ${errors.requester_name ? 'border-destructive' : ''}`} />
               {errors.requester_name && <p className="text-sm text-destructive">{errors.requester_name}</p>}
               <p className="text-xs text-muted-foreground">Masukkan nama user yang meminta pengajuan proyek di luar platform</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pic" className="text-base">PIC (Person In Charge) *</Label>
+              <Select value={formData.pic} onValueChange={value => setFormData(prev => ({
+              ...prev,
+              pic: value
+            }))}>
+                <SelectTrigger className={`h-12 text-base ${errors.pic ? 'border-destructive' : ''}`}>
+                  <SelectValue placeholder="Pilih PIC" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePicOptions.map(opt => <SelectItem key={opt.name} value={opt.name}>{opt.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {errors.pic && <p className="text-sm text-destructive">{errors.pic}</p>}
             </div>
 
             <div className="space-y-2">

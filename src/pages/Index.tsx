@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SimpleLayout } from "@/components/layout/SimpleLayout";
 import { StatsCard } from "@/components/dashboard/StatsCard";
@@ -7,13 +7,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProjects } from "@/hooks/useProjects";
 import { useMasterProyek } from "@/hooks/useMasterProyek";
 import { useEditRequestCounts } from "@/hooks/useEditRequestCounts";
-import { FileText, FolderKanban, Calendar, TrendingUp, BarChart3, PlayCircle, PauseCircle, CheckCircle2, AlertTriangle, Search, ListTodo, ChevronDown, ChevronUp } from "lucide-react";
+import { FileText, FolderKanban, Calendar, TrendingUp, BarChart3, PlayCircle, PauseCircle, CheckCircle2, AlertTriangle, Search, ListTodo, ChevronDown, ChevronUp, Share2, Link2, Copy, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { format, isAfter, isBefore, addDays } from "date-fns";
 import { id } from "date-fns/locale";
 import { ProjectProgressStatus, Project, GanttTask } from "@/types/project";
@@ -30,6 +31,13 @@ export default function Index() {
   const [overdueTasks, setOverdueTasks] = useState<(GanttTask & { project_title: string; master_proyek_id?: string })[]>([]);
   const [showAllOverdueTasks, setShowAllOverdueTasks] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = useToast();
+
+  // Share dashboard state
+  const [showSharePopover, setShowSharePopover] = useState(false);
+  const [monitoringLinks, setMonitoringLinks] = useState<{id: string; token: string; created_at: string}[]>([]);
+  const [shareCopied, setShareCopied] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -40,6 +48,34 @@ export default function Index() {
       navigate("/profile");
     }
   }, [user, authLoading, profile, navigate]);
+
+  // Fetch monitoring links for super admin
+  useEffect(() => {
+    if (!user || !isSuperAdmin) return;
+    supabase.from('monitoring_links' as any).select('id, token, created_at').eq('is_active', true).order('created_at', { ascending: false }).then(({ data }) => {
+      setMonitoringLinks((data as any[]) || []);
+    });
+  }, [user, isSuperAdmin]);
+
+  const handleGenerateMonitoringLink = async () => {
+    setGeneratingLink(true);
+    const { data, error } = await supabase.from('monitoring_links' as any).insert({ created_by: user!.id }).select('id, token, created_at').single();
+    if (error) { toast({ title: 'Gagal', description: 'Gagal membuat link', variant: 'destructive' }); setGeneratingLink(false); return; }
+    setMonitoringLinks(prev => [(data as any), ...prev]);
+    const url = `${window.location.origin}/monitor/${(data as any).token}`;
+    navigator.clipboard.writeText(url);
+    setShareCopied((data as any).id);
+    toast({ title: 'Link dibuat & disalin!', description: 'Link monitoring berhasil dibuat dan disalin ke clipboard.' });
+    setTimeout(() => setShareCopied(null), 2000);
+    setGeneratingLink(false);
+  };
+
+  const handleCopyMonitoringLink = (token: string, id: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/monitor/${token}`);
+    setShareCopied(id);
+    toast({ title: 'Link disalin!' });
+    setTimeout(() => setShareCopied(null), 2000);
+  };
 
   // Fetch overdue tasks for executor dashboard
   useEffect(() => {
@@ -546,7 +582,7 @@ export default function Index() {
                       showAdminNote={false} 
                       compact 
                       editRequestCount={getCount(project.id).total}
-                       showMonevSummary
+                      showObstaclesPreview
                     />
                   ))}
               </div>
@@ -570,8 +606,44 @@ export default function Index() {
     <SimpleLayout>
       <div className="space-y-6">
         <div className="bg-card border border-border rounded-2xl p-6">
-          <h1 className="text-2xl font-bold text-card-foreground mb-2">Selamat Datang, {profile?.name || "User"}!</h1>
-          <p className="text-muted-foreground">{getWelcomeMessage()}</p>
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-bold text-card-foreground mb-2">Selamat Datang, {profile?.name || "User"}!</h1>
+              <p className="text-muted-foreground">{getWelcomeMessage()}</p>
+            </div>
+            {isSuperAdmin && (
+              <div className="relative">
+                <Button onClick={() => setShowSharePopover(!showSharePopover)} className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md">
+                  <Share2 className="w-4 h-4" /> Share Dashboard
+                </Button>
+                {showSharePopover && (
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-xl z-50 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-sm">Link Monitoring Proyek</h3>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowSharePopover(false)}><X className="w-3.5 h-3.5" /></Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3">Bagikan link ini agar atasan bisa memantau proyek tanpa login.</p>
+                    <Button onClick={handleGenerateMonitoringLink} disabled={generatingLink} className="w-full mb-3 gap-2" size="sm">
+                      <Link2 className="w-4 h-4" /> {generatingLink ? 'Membuat...' : 'Buat Link Baru'}
+                    </Button>
+                    {monitoringLinks.length > 0 && (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {monitoringLinks.map(link => (
+                          <div key={link.id} className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg">
+                            <p className="text-[10px] text-muted-foreground font-mono truncate flex-1">/monitor/{link.token.slice(0, 8)}...</p>
+                            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => handleCopyMonitoringLink(link.token, link.id)}>
+                              {shareCopied === link.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                              {shareCopied === link.id ? 'Disalin' : 'Salin'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -719,7 +791,7 @@ export default function Index() {
                   showAdminNote={false} 
                   compact 
                   editRequestCount={getCount(project.id).total}
-                   showMonevSummary={isSuperAdmin}
+                   showObstaclesPreview={isSuperAdmin}
                 />
               ))}
             </div>

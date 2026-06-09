@@ -459,6 +459,7 @@ export type Database = {
           created_at: string
           created_by: string
           description: string
+          google_calendar_event_id: string | null
           id: string
           meeting_date: string
           meeting_time: string
@@ -471,6 +472,7 @@ export type Database = {
           created_at?: string
           created_by: string
           description?: string
+          google_calendar_event_id?: string | null
           id?: string
           meeting_date: string
           meeting_time?: string
@@ -483,6 +485,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           description?: string
+          google_calendar_event_id?: string | null
           id?: string
           meeting_date?: string
           meeting_time?: string
@@ -593,6 +596,34 @@ export type Database = {
         }
         Relationships: []
       }
+      }
+      pic_options: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -676,6 +707,51 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      project_obstacles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_resolved: boolean
+          note: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_resolved?: boolean
+          note: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_resolved?: boolean
+          note?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_obstacles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_obstacles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
         ]
       }
       project_documents: {
@@ -944,6 +1020,7 @@ export type Database = {
           update_requested: boolean | null
           updated_at: string
           urgency: string | null
+          pic: string | null
         }
         Insert: {
           admin_note?: string | null
@@ -970,6 +1047,7 @@ export type Database = {
           update_requested?: boolean | null
           updated_at?: string
           urgency?: string | null
+          pic?: string | null
         }
         Update: {
           admin_note?: string | null
@@ -996,6 +1074,7 @@ export type Database = {
           update_requested?: boolean | null
           updated_at?: string
           urgency?: string | null
+          pic?: string | null
         }
         Relationships: [
           {

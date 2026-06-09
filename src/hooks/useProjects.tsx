@@ -17,7 +17,7 @@ export function useProjects() {
     try {
       const query = supabase
         .from('projects')
-        .select('*, master_proyek:master_proyek_id(*)')
+        .select('*, master_proyek:master_proyek_id(*), project_obstacles(id, note, is_resolved)')
         .order('created_at', { ascending: false });
 
       const { data, error } = await query;
@@ -46,6 +46,8 @@ export function useProjects() {
         urgency: (p as any).urgency || undefined,
         impact: (p as any).impact || undefined,
          monev_summary: (p as unknown as { monev_summary?: string | null }).monev_summary || undefined,
+        pic: (p as any).pic || null,
+        project_obstacles: (p as any).project_obstacles || [],
         created_at: p.created_at,
         updated_at: p.updated_at,
       }));
@@ -213,6 +215,7 @@ export function useProjects() {
       if (updates.urgency !== undefined) dbUpdates.urgency = updates.urgency;
       if (updates.impact !== undefined) dbUpdates.impact = updates.impact;
        if (updates.monev_summary !== undefined) dbUpdates.monev_summary = updates.monev_summary;
+      if (updates.pic !== undefined) dbUpdates.pic = updates.pic;
 
       const { error } = await supabase
         .from('projects')

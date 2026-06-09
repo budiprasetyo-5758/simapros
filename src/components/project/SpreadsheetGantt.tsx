@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { GanttTask, TaskStatus, Project } from '@/types/project';
-import { Plus, Save, X, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Pencil, SendHorizontal, Trash2, CornerDownRight, Maximize2, ExternalLink } from 'lucide-react';
+import { Plus, Save, X, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Pencil, SendHorizontal, Trash2, CornerDownRight, Maximize2, ExternalLink, CalendarCheck, Columns3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import ExcelJS from 'exceljs';
@@ -104,6 +104,7 @@ export function SpreadsheetGantt({
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [collapsedPhases, setCollapsedPhases] = useState<Set<string>>(new Set());
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
+  const [showDetailColumns, setShowDetailColumns] = useState(false);
   
   // Dialog states for adding phase and task
   const [addPhaseDialogOpen, setAddPhaseDialogOpen] = useState(false);
@@ -334,6 +335,65 @@ export function SpreadsheetGantt({
 
 
   const today = useMemo(() => new Date(), []);
+
+  // Computed layout values
+  const cellWidth = isFullscreen ? 24 : 16;
+  const baseColumnsWidth = (isFullscreen ? 510 : 450) + (showDetailColumns ? 260 : 0);
+  const visibleColCount = showDetailColumns ? 11 : 7;
+
+  // Check if today is within project range
+  const isTodayInRange = useMemo(() => {
+    if (!projectStartDate || !projectEndDate) return false;
+    try {
+      const projStart = parseISO(projectStartDate);
+      const projEnd = parseISO(projectEndDate);
+      return today >= projStart && today <= projEnd;
+    } catch {
+      return false;
+    }
+  }, [projectStartDate, projectEndDate, today]);
+
+  // Scroll to today helper
+  const scrollToToday = () => {
+    const el = scrollContainerRef.current;
+    if (!el || days.length === 0) return;
+    try {
+      const projStart = parseISO(projectStartDate);
+      const dayIndex = differenceInDays(today, projStart);
+      if (dayIndex >= 0 && dayIndex < days.length) {
+        const targetX = baseColumnsWidth + (dayIndex * cellWidth) - (el.clientWidth / 3);
+        el.scrollTo({ left: Math.max(0, targetX), behavior: 'smooth' });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Auto-scroll to relevant date on mount
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el || days.length === 0) return;
+    try {
+      const projStart = parseISO(projectStartDate);
+      const projEnd = parseISO(projectEndDate);
+      let targetDayIndex = -1;
+      if (today >= projStart && today <= projEnd) {
+        targetDayIndex = differenceInDays(today, projStart);
+      } else if (today > projEnd) {
+        targetDayIndex = days.length - 1;
+      }
+      if (targetDayIndex >= 0) {
+        const offset = today > projEnd ? el.clientWidth * 0.6 : el.clientWidth / 3;
+        const targetX = baseColumnsWidth + (targetDayIndex * cellWidth) - offset;
+        requestAnimationFrame(() => {
+          el.scrollTo({ left: Math.max(0, targetX), behavior: 'smooth' });
+        });
+      }
+    } catch {
+      // ignore
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days.length]);
 
   // Group days by month for header
   const monthGroups = useMemo(() => {
@@ -584,8 +644,8 @@ export function SpreadsheetGantt({
 
   // Calculate sticky left positions for frozen columns
   const frozenColumnWidths = {
-    wbs: 45,
-    taskTitle: isFullscreen ? 180 : 100,
+    wbs: 50,
+    taskTitle: isFullscreen ? 220 : 160,
   };
 
   // Track edited tasks for batch save
@@ -696,7 +756,7 @@ export function SpreadsheetGantt({
                   )}
                 </button>
               ) : null}
-              <span className={cn("font-medium flex-1", isSubtask && "text-muted-foreground text-[7px]")}>{task.name}</span>
+              <span className={cn("font-medium flex-1", isSubtask && "text-muted-foreground text-[9px]")}>{task.name}</span>
               {canEdit && (
                 <div className="flex flex-col gap-0.5 shrink-0">
                   {!isSubtask && (
@@ -761,7 +821,7 @@ export function SpreadsheetGantt({
                 </>
               )}
               {hasPendingTaskRequest(task.id) && (
-                <span className="px-1 py-0.5 text-[6px] bg-warning/20 text-warning rounded" title="Ada permintaan pending">
+                <span className="px-1 py-0.5 text-[8px] bg-warning/20 text-warning rounded" title="Ada permintaan pending">
                   Pending
                 </span>
               )}
@@ -770,6 +830,7 @@ export function SpreadsheetGantt({
         </td>
         
         {/* Description */}
+        {showDetailColumns && (
         <td className="border-r border-b border-border px-0.5 py-0.5">
           {isEditMode ? (
             <Input 
@@ -791,6 +852,7 @@ export function SpreadsheetGantt({
             <span className="text-muted-foreground">-</span>
           )}
         </td>
+        )}
 
         {/* PIC */}
         <td className="border-r border-b border-border px-0.5 py-0.5 text-center">
@@ -812,10 +874,10 @@ export function SpreadsheetGantt({
               type="date" 
               value={getEditedValue(task, 'start_date') as string} 
               onChange={(e) => handleFieldChange(task.id, 'start_date', e.target.value)} 
-              className="h-5 text-[7px] px-0.5" 
+              className="h-5 text-[9px] px-0.5" 
             />
           ) : (
-            <span className="text-[7px]">{format(parseISO(task.start_date), 'd/M')}</span>
+            <span className="text-[9px]">{format(parseISO(task.start_date), 'd/M')}</span>
           )}
         </td>
         
@@ -826,10 +888,10 @@ export function SpreadsheetGantt({
               type="date" 
               value={getEditedValue(task, 'end_date') as string} 
               onChange={(e) => handleFieldChange(task.id, 'end_date', e.target.value)} 
-              className="h-5 text-[7px] px-0.5" 
+              className="h-5 text-[9px] px-0.5" 
             />
           ) : (
-            <span className="text-[7px]">{format(parseISO(task.end_date), 'd/M')}</span>
+            <span className="text-[9px]">{format(parseISO(task.end_date), 'd/M')}</span>
           )}
         </td>
         
@@ -846,7 +908,7 @@ export function SpreadsheetGantt({
             />
           ) : (
             <div className={cn(
-              "inline-block px-1 py-0 rounded text-[7px] font-medium",
+              "inline-block px-1 py-0 rounded text-[9px] font-medium",
               task.progress === 100 ? "bg-success/20 text-success" : task.progress > 0 ? "bg-primary/20 text-primary" : "bg-muted"
             )}>
               {task.progress}%
@@ -861,7 +923,7 @@ export function SpreadsheetGantt({
               value={getEditedValue(task, 'status') as TaskStatus} 
               onValueChange={(v) => handleFieldChange(task.id, 'status', v)}
             >
-              <SelectTrigger className="h-5 text-[7px] px-1"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-5 text-[9px] px-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="not_started">Not Started</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
@@ -870,13 +932,14 @@ export function SpreadsheetGantt({
               </SelectContent>
             </Select>
           ) : (
-            <span className={cn("inline-block px-1 py-0 rounded text-[7px] font-medium whitespace-nowrap", statusConfig[task.status]?.className || 'bg-muted')}>
+            <span className={cn("inline-block px-1 py-0 rounded text-[9px] font-medium whitespace-nowrap", statusConfig[task.status]?.className || 'bg-muted')}>
               {statusConfig[task.status]?.label || task.status}
             </span>
           )}
         </td>
 
         {/* MONEV */}
+        {showDetailColumns && (
         <td className="border-r border-b border-border px-0.5 py-0.5">
           {isEditMode ? (
             <Input 
@@ -898,8 +961,10 @@ export function SpreadsheetGantt({
             <span className="text-muted-foreground">-</span>
           )}
         </td>
+        )}
 
         {/* Deliverable Result (Attachment) */}
+        {showDetailColumns && (
         <td className="border-r border-b border-border px-0.5 py-0.5 text-center">
           {isEditMode ? (
             <div className="flex items-center gap-1">
@@ -959,8 +1024,10 @@ export function SpreadsheetGantt({
             <span className="text-muted-foreground">-</span>
           )}
         </td>
+        )}
 
         {/* Problem */}
+        {showDetailColumns && (
         <td className="border-r border-b border-border px-0.5 py-0.5">
           {isEditMode ? (
             <Input 
@@ -982,6 +1049,7 @@ export function SpreadsheetGantt({
             <span className="text-muted-foreground">-</span>
           )}
         </td>
+        )}
 
 
         {/* Timeline cells */}
@@ -997,9 +1065,9 @@ export function SpreadsheetGantt({
             return (
               <td key={idx} className={cn(
                 "border-r border-b border-border px-0 py-0 transition-colors duration-200",
-                isTodayCol && "bg-primary/[0.06]"
+                isTodayCol && "bg-primary/[0.06] gantt-today-col"
               )}>
-                <div className={cn("w-full", isFullscreen ? "h-5" : "h-3")} />
+                <div className={cn("w-full", isFullscreen ? "h-6" : "h-5")} />
               </td>
             );
           }
@@ -1012,12 +1080,13 @@ export function SpreadsheetGantt({
                 className={cn(
                   'border-r border-b border-border px-0 py-0 transition-colors duration-200', 
                   barColor, 
-                  isActiveToday && 'ring-2 ring-inset ring-primary shadow-sm'
+                  isActiveToday && 'ring-2 ring-inset ring-primary shadow-sm',
+                  isTodayCol && 'gantt-today-col'
                 )}
               >
                 <HoverCard openDelay={200} closeDelay={100}>
                   <HoverCardTrigger asChild>
-                    <div className={cn("w-full cursor-pointer rounded-l", isFullscreen ? "h-5" : "h-3")} />
+                    <div className={cn("w-full cursor-pointer rounded-l", isFullscreen ? "h-6" : "h-5")} />
                   </HoverCardTrigger>
                   <HoverCardContent className="w-72 text-xs" side="top">
                     <div className="space-y-2">
@@ -1078,10 +1147,11 @@ export function SpreadsheetGantt({
               className={cn(
                 'border-r border-b border-border px-0 py-0 transition-colors duration-200', 
                 barColor, 
-                isActiveToday && 'ring-2 ring-inset ring-primary shadow-sm'
+                isActiveToday && 'ring-2 ring-inset ring-primary shadow-sm',
+                isTodayCol && 'gantt-today-col'
               )}
             >
-              <div className={cn("w-full", isLast && "rounded-r", isFullscreen ? "h-5" : "h-3")} />
+              <div className={cn("w-full", isLast && "rounded-r", isFullscreen ? "h-6" : "h-5")} />
             </td>
           );
         })}
@@ -1170,6 +1240,21 @@ export function SpreadsheetGantt({
             <FileSpreadsheet className="w-3.5 h-3.5" />
             Export
           </Button>
+          <Button
+            variant={showDetailColumns ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowDetailColumns(!showDetailColumns)}
+            className="gap-1.5 h-7"
+          >
+            <Columns3 className="w-3.5 h-3.5" />
+            Detail
+          </Button>
+          {isTodayInRange && (
+            <Button variant="outline" size="sm" onClick={scrollToToday} className="gap-1.5 h-7">
+              <CalendarCheck className="w-3.5 h-3.5" />
+              Hari Ini
+            </Button>
+          )}
           {!isFullscreen && (
             <Button 
               variant="outline" 
@@ -1218,8 +1303,24 @@ export function SpreadsheetGantt({
           .gantt-scroll-container::-webkit-scrollbar-thumb:hover {
             background: hsl(var(--muted-foreground) / 0.7);
           }
+          .gantt-today-col {
+            position: relative;
+          }
+          .gantt-today-col::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: hsl(var(--primary));
+            opacity: 0.35;
+            pointer-events: none;
+            transform: translateX(-50%);
+            z-index: 1;
+          }
         `}</style>
-        <table className={cn("w-full border-collapse", isFullscreen ? "text-xs" : "text-[8px]")} style={{ minWidth: `${810 + days.length * (isFullscreen ? 24 : 14)}px` }}>
+        <table className={cn("w-full border-collapse", isFullscreen ? "text-xs" : "text-[10px]")} style={{ minWidth: `${baseColumnsWidth + days.length * cellWidth}px` }}>
           <thead>
             {/* Month header row */}
             <tr className="bg-muted/80">
@@ -1229,9 +1330,11 @@ export function SpreadsheetGantt({
               <th className="sticky z-20 bg-muted/80 border-r border-b border-border" style={{ left: frozenColumnWidths.wbs, width: frozenColumnWidths.taskTitle, minWidth: frozenColumnWidths.taskTitle }} rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-left font-semibold">TASK</div>
               </th>
+              {showDetailColumns && (
               <th className="border-r border-b border-border min-w-[80px]" rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-left font-semibold">DESC</div>
               </th>
+              )}
               <th className="border-r border-b border-border w-[40px]" rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-center font-semibold">PIC</div>
               </th>
@@ -1247,6 +1350,8 @@ export function SpreadsheetGantt({
               <th className="border-r border-b border-border w-[55px]" rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-center font-semibold">STATUS</div>
               </th>
+              {showDetailColumns && (
+              <>
               <th className="border-r border-b border-border min-w-[60px]" rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-center font-semibold">MONEV</div>
               </th>
@@ -1256,6 +1361,8 @@ export function SpreadsheetGantt({
               <th className="border-r border-b border-border min-w-[60px]" rowSpan={3}>
                 <div className="px-0.5 py-0.5 text-center font-semibold">PROBLEM</div>
               </th>
+              </>
+              )}
               
               {/* Month headers */}
               {monthGroups.map((month, idx) => (
@@ -1264,7 +1371,7 @@ export function SpreadsheetGantt({
                   colSpan={month.count}
                   className="border-r border-b border-border px-0 py-0.5 text-center font-semibold bg-primary/15"
                 >
-                  <div className={cn("leading-none whitespace-nowrap", isFullscreen ? "text-[10px]" : "text-[7px]")}>
+                  <div className={cn("leading-none whitespace-nowrap", isFullscreen ? "text-[11px]" : "text-[9px]")}>
                     {month.label}
                   </div>
                 </th>
@@ -1280,7 +1387,7 @@ export function SpreadsheetGantt({
                   colSpan={week.days.length}
                   className="border-r border-b border-border px-0 py-0 text-center font-medium bg-primary/10"
                 >
-                  <div className={cn("leading-none whitespace-nowrap", isFullscreen ? "text-[10px]" : "text-[7px]")}>
+                  <div className={cn("leading-none whitespace-nowrap", isFullscreen ? "text-[11px]" : "text-[9px]")}>
                     W{idx + 1}
                   </div>
                 </th>
@@ -1296,17 +1403,18 @@ export function SpreadsheetGantt({
                     key={idx}
                     className={cn(
                       "border-r border-b border-border px-0 text-center font-normal transition-colors duration-200",
-                      isFullscreen ? "w-[24px] min-w-[24px] py-0.5" : "w-[14px] min-w-[14px] py-0.5",
+                      isFullscreen ? "w-[24px] min-w-[24px] py-0.5" : "w-[16px] min-w-[16px] py-0.5",
+                      isTodayCol && "gantt-today-col",
                     )}
                     title={format(day, 'd MMMM yyyy', { locale: localeId })}
                   >
                     <div className={cn(
                       "leading-none mx-auto flex items-center justify-center transition-all duration-300",
-                      isFullscreen ? "text-[9px]" : "text-[6px]",
+                      isFullscreen ? "text-[10px]" : "text-[8px]",
                       isTodayCol 
                         ? cn(
                             "bg-primary text-primary-foreground font-bold rounded-full shadow-sm",
-                            isFullscreen ? "w-5 h-5" : "w-3.5 h-3.5"
+                            isFullscreen ? "w-5 h-5" : "w-4 h-4"
                           )
                         : "text-muted-foreground"
                     )}>
@@ -1334,7 +1442,7 @@ export function SpreadsheetGantt({
                     onClick={() => togglePhase(phase)}
                   >
                     <td 
-                      colSpan={11 + days.length} 
+                      colSpan={visibleColCount + days.length} 
                       className="sticky left-0 z-10 border-b border-border px-2 py-2"
                     >
                       <div className="flex items-center gap-2">
@@ -1408,7 +1516,7 @@ export function SpreadsheetGantt({
                   {!isCollapsed && canEdit && (
                     <tr className="hover:bg-muted/30 transition-colors">
                       <td
-                        colSpan={11 + days.length}
+                        colSpan={visibleColCount + days.length}
                         className="sticky left-0 z-10 border-b border-border px-2 py-1.5"
                       >
                         <Button
@@ -1433,7 +1541,7 @@ export function SpreadsheetGantt({
                 {allPhases.length > 0 && (
                   <tr className="bg-card">
                     <td 
-                      colSpan={10 + days.length} 
+                      colSpan={visibleColCount + days.length} 
                       className="sticky left-0 z-10 border-b border-border px-2 py-2"
                     >
                       <div className="flex items-center gap-2">

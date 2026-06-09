@@ -72,7 +72,7 @@ export default function ApprovalQueue() {
     setIsEvaluationOpen(false);
   };
 
-  // AI Task generation removed - now manual by Executor
+
 
   // Function to send notification
   const sendNotification = async (
@@ -131,10 +131,10 @@ export default function ApprovalQueue() {
         );
       }
 
-      // AI Task generation is now MANUAL - triggered by Executor via ProjectDetail page
+      // Task creation is now manual - triggered by Executor via ProjectDetail page
       toast({
         title: 'Proyek Disetujui',
-        description: 'Proyek telah disetujui. Eksekutor dapat men-generate task AI secara manual di halaman detail proyek.',
+        description: 'Proyek telah disetujui. Eksekutor dapat menambahkan task di halaman detail proyek.',
       });
     } else {
       toast({
@@ -286,6 +286,12 @@ export default function ApprovalQueue() {
                       <span><strong>Unit:</strong> {project.unit}</span>
                       <span>•</span>
                       <span><strong>Pengaju:</strong> {project.requester_name}</span>
+                      {project.pic && (
+                        <>
+                          <span>•</span>
+                          <span><strong>PIC:</strong> {project.pic}</span>
+                        </>
+                      )}
                       <span>•</span>
                       <span>{format(parseISO(project.created_at), 'dd MMM yyyy', { locale: localeId })}</span>
                       {project.start_date && project.end_date && (

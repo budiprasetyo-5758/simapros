@@ -8,9 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Project, ProjectPriority } from '@/types/project';
 import { PriorityMatrixSelector } from '@/components/project/PriorityMatrixSelector';
 import { Urgency, Impact, calculatePriority, priorityConfig as matrixPriorityConfig } from '@/lib/priorityMatrix';
+import { usePicOptions } from '@/hooks/usePicOptions';
 import { format, parseISO } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -41,6 +43,7 @@ export function ProjectEvaluationDialog({
 }: ProjectEvaluationDialogProps) {
   const [activeTab, setActiveTab] = useState<'review' | 'edit' | 'action'>('review');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { activePicOptions } = usePicOptions();
   
   // Edited form state
   const [editedTitle, setEditedTitle] = useState('');
@@ -50,6 +53,7 @@ export function ProjectEvaluationDialog({
   const [impact, setImpact] = useState<Impact>('minor');
   const [editedStartDate, setEditedStartDate] = useState('');
   const [editedEndDate, setEditedEndDate] = useState('');
+  const [selectedPic, setSelectedPic] = useState('');
   const [technicalNotes, setTechnicalNotes] = useState('');
   
   // Action notes
@@ -70,7 +74,7 @@ export function ProjectEvaluationDialog({
       setImpact((project as any).impact || 'minor');
       setEditedStartDate(project.start_date || '');
       setEditedEndDate(project.end_date || '');
-      setEditedEndDate(project.end_date || '');
+      setSelectedPic(project.pic || '');
       setTechnicalNotes('');
       setRevisionNote('');
       setRejectNote('');
@@ -103,6 +107,10 @@ export function ProjectEvaluationDialog({
       // Map critical to urgent for database compatibility
       const dbPriority = calculatedPriority === 'critical' ? 'urgent' : calculatedPriority;
       
+      if (!selectedPic) {
+        return;
+      }
+
       const editedData: Partial<Project> = {
         title: editedTitle,
         description: editedDescription,
@@ -110,6 +118,7 @@ export function ProjectEvaluationDialog({
         priority: dbPriority as ProjectPriority,
         start_date: editedStartDate,
         end_date: editedEndDate,
+        pic: selectedPic,
       };
       await onApprove(project.id, editedData, technicalNotes);
       onClose();
@@ -297,6 +306,23 @@ export function ProjectEvaluationDialog({
                   />
                 </div>
 
+                <div>
+                  <Label htmlFor="edit-pic">PIC (Person In Charge) *</Label>
+                  <Select value={selectedPic} onValueChange={setSelectedPic}>
+                    <SelectTrigger className={cn('mt-1', !selectedPic && 'border-destructive')}>
+                      <SelectValue placeholder="Pilih PIC" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activePicOptions.map((opt) => (
+                        <SelectItem key={opt.name} value={opt.name}>{opt.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!selectedPic && (
+                    <p className="text-xs text-destructive mt-1">PIC wajib dipilih sebelum menyetujui</p>
+                  )}
+                </div>
+
                 {/* Priority Matrix - Super Admin only */}
                 <div className="md:col-span-2">
                   <Label className="mb-2 block">Penentuan Prioritas (Urgensi x Impact)</Label>
@@ -379,7 +405,7 @@ export function ProjectEvaluationDialog({
               </p>
               <Button 
                 onClick={handleApprove}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !selectedPic}
                 className="bg-success hover:bg-success/90 text-success-foreground w-full gap-2"
               >
                 <CheckCircle className="w-4 h-4" />

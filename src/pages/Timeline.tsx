@@ -321,7 +321,7 @@ export default function Timeline() {
       if (error) throw error;
       toast({
         title: 'Sync Berhasil',
-        description: `${data?.synced || 0} project berhasil disinkronkan ke Google Calendar.`,
+        description: `${data?.synced || 0} jadwal meeting berhasil disinkronkan ke Google Calendar.`,
       });
     } catch (err: any) {
       toast({

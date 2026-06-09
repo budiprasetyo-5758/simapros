@@ -12,7 +12,6 @@ import {
   Shield,
   UserCog,
   FileEdit,
-  Sparkles,
   Settings,
   Users,
   CalendarDays,
@@ -20,6 +19,7 @@ import {
   ChevronRight,
   Building2,
   FolderCheck,
+  UserCheck,
 } from "lucide-react";
 import logoImage from "@/assets/logo.jpeg";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,8 @@ const navItems = [
   { title: "Permintaan Edit", icon: FileEdit, path: "/edit-requests", badgeKey: "editRequests" as const },
   { title: "Unit Kerja Request", icon: Users, path: "/unit-kerja-requests", badgeKey: "unitKerjaRequests" as const },
   { divider: true },
-  { title: "AI Report", icon: Sparkles, path: "/weekly-report" },
+  { title: "Master PIC", icon: UserCheck, path: "/master-pic", superAdminOnly: true },
+  { title: "Laporan Mingguan", icon: FileText, path: "/weekly-report" },
   { title: "Pengguna", icon: User, path: "/users" },
 ];
 

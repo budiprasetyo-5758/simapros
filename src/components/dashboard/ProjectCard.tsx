@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Project, ProjectProgressStatus, ProjectPriority } from '@/types/project';
-import { Calendar, Building2, FolderKanban, PlayCircle, PauseCircle, CheckCircle2, FileText } from 'lucide-react';
+import { Calendar, Building2, FolderKanban, PlayCircle, PauseCircle, CheckCircle2, FileText, User, CalendarPlus, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProjectCardProps {
@@ -13,7 +13,7 @@ interface ProjectCardProps {
   showAdminNote?: boolean;
   compact?: boolean;
   editRequestCount?: number;
-   showMonevSummary?: boolean;
+  showObstaclesPreview?: boolean;
 }
 
  const priorityConfig: Record<ProjectPriority, { label: string; className: string; borderColor: string }> = {
@@ -29,7 +29,7 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
   'completed': { label: 'Selesai', className: 'bg-primary/10 text-primary border-primary/20', icon: CheckCircle2 },
 };
 
- export function ProjectCard({ project, showAdminNote = true, compact = false, editRequestCount = 0, showMonevSummary = false }: ProjectCardProps) {
+export function ProjectCard({ project, showAdminNote = true, compact = false, editRequestCount = 0, showObstaclesPreview = false }: ProjectCardProps) {
   const navigate = useNavigate();
 
   const handleClick = () => {
@@ -71,6 +71,12 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
               );
             })()
           )}
+          {project.project_obstacles?.some(o => !o.is_resolved) && (
+            <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/20 animate-pulse">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Kendala
+            </Badge>
+          )}
         </div>
         <h3 className={cn(
           "font-semibold text-card-foreground",
@@ -80,20 +86,20 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
         </h3>
       </CardHeader>
       <CardContent className={cn("pt-0", compact && "flex-1 flex flex-col justify-between")}>
-        {project.monev_summary ? (
+        {project.project_obstacles && project.project_obstacles.length > 0 ? (
           <ul className={cn(
             "text-muted-foreground text-xs mb-3 space-y-0",
             compact ? "line-clamp-3" : ""
           )}>
-            {project.monev_summary
-              .split(/\n|•/)
-              .map(s => s.trim())
-              .filter(s => s.length > 0)
+            {project.project_obstacles
               .slice(0, compact ? 2 : 3)
-              .map((point, i) => (
-                <li key={i} className="text-muted-foreground flex items-start gap-1 leading-tight py-0.5">
-                  <span className="mt-1 w-1 h-1 rounded-full bg-primary shrink-0" />
-                  <span className="line-clamp-1">{point}</span>
+              .map((obs) => (
+                <li key={obs.id} className="text-muted-foreground flex items-start gap-1 leading-tight py-0.5">
+                  <span className={cn(
+                    "mt-1 w-1.5 h-1.5 rounded-full shrink-0",
+                    obs.is_resolved ? "bg-success" : "bg-destructive animate-pulse"
+                  )} />
+                  <span className={cn("line-clamp-1", obs.is_resolved && "line-through opacity-70")}>{obs.note}</span>
                 </li>
               ))}
           </ul>
@@ -102,7 +108,7 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
             "text-muted-foreground text-xs mb-3 italic opacity-60",
             compact ? "line-clamp-2" : "line-clamp-1"
           )}>
-            Belum ada rangkuman monev
+            Belum ada kendala proyek
           </p>
         )}
         
@@ -110,6 +116,13 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
           "text-sm text-muted-foreground",
           compact ? "space-y-1" : "flex flex-wrap items-center gap-x-4 gap-y-2"
         )}>
+          {/* PIC */}
+          {project.pic && (
+            <div className="flex items-center gap-1">
+              <User className="w-4 h-4 flex-shrink-0 text-primary/70" />
+              <span className="truncate font-medium">{project.pic}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1">
             <Building2 className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">{project.unit}</span>
@@ -119,6 +132,13 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
               <span>Pengaju: {project.requester_name}</span>
             </div>
           )}
+          {/* Tanggal Pengajuan */}
+          <div className="flex items-center gap-1">
+            <CalendarPlus className="w-4 h-4 flex-shrink-0" />
+            <span className="truncate">
+              {format(parseISO(project.created_at), 'd MMM yy', { locale: localeId })}
+            </span>
+          </div>
           {project.start_date && project.end_date && (
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4 flex-shrink-0" />
@@ -130,15 +150,15 @@ const progressStatusConfig: Record<ProjectProgressStatus, { label: string; class
           )}
         </div>
 
-         {/* Monev Summary Preview */}
-         {showMonevSummary && (project as Project & { monev_summary?: string }).monev_summary && !compact && (
-           <div className="mt-4 p-3 rounded-lg text-sm bg-primary/5 border border-primary/20">
-             <p className="font-medium mb-1 flex items-center gap-1 text-primary">
-               <FileText className="w-4 h-4" />
-               Rangkuman Monev:
+         {/* Obstacles Preview */}
+         {showObstaclesPreview && project.project_obstacles && project.project_obstacles.length > 0 && !compact && (
+           <div className="mt-4 p-3 rounded-lg text-sm bg-warning/5 border border-warning/20">
+             <p className="font-medium mb-1 flex items-center gap-1 text-warning">
+               <AlertTriangle className="w-4 h-4" />
+               Kendala Proyek Terbaru:
              </p>
              <p className="text-muted-foreground line-clamp-2">
-               {(project as Project & { monev_summary?: string }).monev_summary}
+               {project.project_obstacles[0].note}
              </p>
           </div>
         )}
