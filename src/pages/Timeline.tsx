@@ -319,9 +319,19 @@ export default function Timeline() {
     try {
       const { data, error } = await supabase.functions.invoke('sync-google-calendar');
       if (error) throw error;
+      const parts = [
+        `${data?.synced || 0}/${data?.total || 0} jadwal meeting berhasil disinkronkan.`,
+      ];
+      if (data?.cleaned > 0) {
+        parts.push(`${data.cleaned} event project lama dibersihkan dari Google Calendar.`);
+      }
+      if (data?.syncErrors?.length > 0) {
+        parts.push(`${data.syncErrors.length} meeting gagal sync.`);
+      }
       toast({
-        title: 'Sync Berhasil',
-        description: `${data?.synced || 0} jadwal meeting berhasil disinkronkan ke Google Calendar.`,
+        title: data?.syncErrors?.length > 0 ? 'Sync Selesai (Sebagian Gagal)' : 'Sync Berhasil',
+        description: parts.join(' '),
+        variant: data?.syncErrors?.length > 0 ? 'destructive' : 'default',
       });
     } catch (err: any) {
       toast({
@@ -333,6 +343,7 @@ export default function Timeline() {
       setSyncing(false);
     }
   };
+
 
   // Fetch Google Calendar URL
   const { data: calendarUrl } = useQuery({

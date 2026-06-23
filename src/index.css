@@ -143,6 +143,15 @@ All colors MUST be HSL.
 
 /* Custom scrollbar styles for better visibility */
 @layer utilities {
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
   .scrollbar-visible {
     scrollbar-width: auto;
     scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));

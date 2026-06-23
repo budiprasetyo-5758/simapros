@@ -102,8 +102,57 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const appUrl = Deno.env.get('APP_URL') || 'https://simapros.my.id';
+    const calendarApi = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
-    // Fetch meetings
+    // ========================================================
+    // STEP 1: Cleanup old project events from Google Calendar
+    // ========================================================
+    console.log('[sync-gcal] Step 1: Cleaning up old project events...');
+
+    const { data: projectsWithEvents } = await supabase
+      .from('projects')
+      .select('id, title, google_calendar_event_id')
+      .not('google_calendar_event_id', 'is', null);
+
+    let cleaned = 0;
+    const cleanupErrors: string[] = [];
+
+    for (const project of (projectsWithEvents || [])) {
+      try {
+        const delRes = await fetch(
+          `${calendarApi}/${project.google_calendar_event_id}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        // 200/204 = deleted, 404/410 = already gone — all are fine
+        if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
+          await supabase
+            .from('projects')
+            .update({ google_calendar_event_id: null })
+            .eq('id', project.id);
+          cleaned++;
+          console.log(`[sync-gcal] Cleaned project event: ${project.title} (${project.id})`);
+        } else {
+          const errText = await delRes.text();
+          console.error(`[sync-gcal] Failed to cleanup project ${project.id}:`, errText);
+          cleanupErrors.push(`Project "${project.title}": ${delRes.status}`);
+        }
+      } catch (e) {
+        console.error(`[sync-gcal] Error cleaning project ${project.id}:`, e);
+        cleanupErrors.push(`Project "${project.title}": ${e.message}`);
+      }
+    }
+
+    console.log(`[sync-gcal] Cleanup done. Removed ${cleaned} project events.`);
+
+    // ========================================================
+    // STEP 2: Sync meetings to Google Calendar
+    // ========================================================
+    console.log('[sync-gcal] Step 2: Syncing meetings...');
+
     const { data: meetings, error } = await supabase
       .from('meetings')
       .select('id, title, description, meeting_date, meeting_time, project_id, google_calendar_event_id')
@@ -111,90 +160,140 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    const calendarApi = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
     let synced = 0;
+    const syncErrors: string[] = [];
 
     for (const meeting of (meetings || [])) {
-      let start, end;
-      
-      if (meeting.meeting_time) {
-        // Has specific time (assume Asia/Jakarta timezone +07:00)
-        // Format: YYYY-MM-DDTHH:MM:SS+07:00
-        const dateTimeStr = `${meeting.meeting_date}T${meeting.meeting_time}+07:00`;
-        start = { dateTime: dateTimeStr, timeZone: 'Asia/Jakarta' };
+      try {
+        let start, end;
         
-        // Add 1 hour for end time
-        const endDate = new Date(new Date(dateTimeStr).getTime() + 60 * 60 * 1000);
-        // Format manually to preserve timezone
-        const endIso = endDate.toISOString(); // e.g. 2023-10-15T03:00:00.000Z
-        // Convert to local +0700 string format? 
-        // Actually, Google Calendar accepts Z format as well, but it's easier to just pass the Date object string and let Google handle it.
-        // Wait, passing it as ISO string with timeZone will work:
-        end = { dateTime: endDate.toISOString(), timeZone: 'Asia/Jakarta' };
-      } else {
-        // All-day event
-        start = { date: meeting.meeting_date };
-        
-        // End date is exclusive in Google Calendar, so add 1 day
-        const nextDay = new Date(new Date(meeting.meeting_date).getTime() + 24 * 60 * 60 * 1000);
-        end = { date: nextDay.toISOString().split('T')[0] };
-      }
-
-      const eventBody = {
-        summary: `Meeting: ${meeting.title}`,
-        description: [
-          meeting.description || '',
-          '',
-          meeting.project_id ? `Project ID: ${meeting.project_id}` : '',
-          `Link: ${appUrl}/timeline`,
-        ].filter(Boolean).join('\n'),
-        start,
-        end,
-      };
-
-      let res: Response;
-      if (meeting.google_calendar_event_id) {
-        // Update existing event
-        res = await fetch(`${calendarApi}/${meeting.google_calendar_event_id}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(eventBody),
-        });
-      } else {
-        // Create new event
-        res = await fetch(calendarApi, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(eventBody),
-        });
-      }
-
-      if (res.ok) {
-        const eventData = await res.json();
-        if (!meeting.google_calendar_event_id && eventData.id) {
-          await supabase
-            .from('meetings')
-            .update({ google_calendar_event_id: eventData.id })
-            .eq('id', meeting.id);
+        if (meeting.meeting_time) {
+          // Timed event — use Asia/Jakarta timezone
+          const timeStr = meeting.meeting_time.slice(0, 8); // Ensure HH:MM:SS format
+          const dateTimeStr = `${meeting.meeting_date}T${timeStr}+07:00`;
+          start = { dateTime: dateTimeStr, timeZone: 'Asia/Jakarta' };
+          
+          // End time = start + 1 hour
+          const startMs = new Date(dateTimeStr).getTime();
+          const endMs = startMs + 60 * 60 * 1000;
+          const endDate = new Date(endMs);
+          
+          // Format end time in +07:00
+          const endHours = String(endDate.getUTCHours() + 7).padStart(2, '0');
+          const endMins = String(endDate.getUTCMinutes()).padStart(2, '0');
+          const endSecs = String(endDate.getUTCSeconds()).padStart(2, '0');
+          // Use ISO string with timeZone parameter — Google handles the conversion
+          end = { dateTime: endDate.toISOString(), timeZone: 'Asia/Jakarta' };
+        } else {
+          // All-day event
+          start = { date: meeting.meeting_date };
+          
+          // End date is exclusive in Google Calendar, so add 1 day
+          const nextDay = new Date(new Date(meeting.meeting_date + 'T00:00:00Z').getTime() + 24 * 60 * 60 * 1000);
+          end = { date: nextDay.toISOString().split('T')[0] };
         }
-        synced++;
-      } else {
-        const errText = await res.text();
-        console.error(`Failed to sync meeting ${meeting.id}:`, errText);
+
+        // Fetch project title if linked
+        let projectName = '';
+        if (meeting.project_id) {
+          const { data: proj } = await supabase
+            .from('projects')
+            .select('title')
+            .eq('id', meeting.project_id)
+            .single();
+          projectName = proj?.title || '';
+        }
+
+        const eventBody = {
+          summary: `Meeting: ${meeting.title}`,
+          description: [
+            meeting.description || '',
+            '',
+            projectName ? `Proyek: ${projectName}` : '',
+            `Lihat detail: ${appUrl}/timeline`,
+          ].filter(Boolean).join('\n'),
+          start,
+          end,
+        };
+
+        let res: Response;
+        if (meeting.google_calendar_event_id) {
+          // Try to update existing event
+          res = await fetch(`${calendarApi}/${meeting.google_calendar_event_id}`, {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventBody),
+          });
+
+          // If event no longer exists (404/410), create a new one instead
+          if (res.status === 404 || res.status === 410) {
+            console.log(`[sync-gcal] Event for meeting "${meeting.title}" not found, creating new...`);
+            // Clear old ID
+            await supabase
+              .from('meetings')
+              .update({ google_calendar_event_id: null })
+              .eq('id', meeting.id);
+            
+            // Create new event
+            res = await fetch(calendarApi, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(eventBody),
+            });
+          }
+        } else {
+          // Create new event
+          res = await fetch(calendarApi, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(eventBody),
+          });
+        }
+
+        if (res.ok) {
+          const eventData = await res.json();
+          // Save/update the Google Calendar event ID
+          if (eventData.id) {
+            await supabase
+              .from('meetings')
+              .update({ google_calendar_event_id: eventData.id })
+              .eq('id', meeting.id);
+          }
+          synced++;
+          console.log(`[sync-gcal] Synced meeting: "${meeting.title}" (${meeting.meeting_date})`);
+        } else {
+          const errText = await res.text();
+          console.error(`[sync-gcal] Failed to sync meeting "${meeting.title}" (${meeting.id}):`, errText);
+          syncErrors.push(`"${meeting.title}" (${meeting.meeting_date}): ${res.status}`);
+        }
+      } catch (e) {
+        console.error(`[sync-gcal] Error syncing meeting "${meeting.title}" (${meeting.id}):`, e);
+        syncErrors.push(`"${meeting.title}": ${e.message}`);
       }
     }
 
-    return new Response(JSON.stringify({ synced, total: meetings?.length || 0 }), {
+    console.log(`[sync-gcal] Sync done. Synced ${synced}/${meetings?.length || 0} meetings.`);
+
+    return new Response(JSON.stringify({
+      synced,
+      total: meetings?.length || 0,
+      cleaned,
+      cleanupErrors: cleanupErrors.length > 0 ? cleanupErrors : undefined,
+      syncErrors: syncErrors.length > 0 ? syncErrors : undefined,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('Sync error:', err);
+    console.error('[sync-gcal] Fatal error:', err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

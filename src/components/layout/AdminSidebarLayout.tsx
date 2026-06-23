@@ -110,7 +110,7 @@ export function AdminSidebarLayout({ children }: AdminSidebarLayoutProps) {
         </div>
 
         {/* Nav Items */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+        <nav className="flex-1 overflow-y-auto scrollbar-hidden py-3 px-2 space-y-1">
           {navItems.map((item, index) => {
             if ("divider" in item && item.divider) {
               return <div key={`div-${index}`} className="my-2 border-t border-primary-foreground/10" />;
