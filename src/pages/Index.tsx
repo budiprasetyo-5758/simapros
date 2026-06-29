@@ -19,14 +19,17 @@ import { format, isAfter, isBefore, addDays } from "date-fns";
 import { id } from "date-fns/locale";
 import { ProjectProgressStatus, Project, GanttTask } from "@/types/project";
 import { supabase } from "@/integrations/supabase/client";
+import { usePicOptions } from "@/hooks/usePicOptions";
 
 export default function Index() {
   const navigate = useNavigate();
   const { user, loading: authLoading, isAdmin, isSuperAdmin, isProjectExecutor, profile } = useAuth();
   const { projects, loading: projectsLoading } = useProjects();
   const { masterProyek } = useMasterProyek();
+  const { picOptions } = usePicOptions();
   const { getCount } = useEditRequestCounts();
   const [masterFilter, setMasterFilter] = useState<string>("all");
+  const [picFilter, setPicFilter] = useState<string>("all");
   const [progressFilter, setProgressFilter] = useState<string>("all");
   const [overdueTasks, setOverdueTasks] = useState<(GanttTask & { project_title: string; master_proyek_id?: string })[]>([]);
   const [showAllOverdueTasks, setShowAllOverdueTasks] = useState(false);
@@ -35,7 +38,7 @@ export default function Index() {
 
   // Share dashboard state
   const [showSharePopover, setShowSharePopover] = useState(false);
-  const [monitoringLinks, setMonitoringLinks] = useState<{id: string; token: string; created_at: string}[]>([]);
+  const [monitoringLinks, setMonitoringLinks] = useState<{ id: string; token: string; created_at: string }[]>([]);
   const [shareCopied, setShareCopied] = useState<string | null>(null);
   const [generatingLink, setGeneratingLink] = useState(false);
 
@@ -144,29 +147,34 @@ export default function Index() {
   // For project executors, only show approved/active projects
   // For super admins, show all projects
   // For regular users, show their own projects (handled by RLS)
-  const displayProjects = isProjectExecutor && !isSuperAdmin 
+  const displayProjects = isProjectExecutor && !isSuperAdmin
     ? projects.filter(p => p.status === 'approved' || p.status === 'active')
     : projects;
 
   // Apply search filter
   let filteredProjects = searchQuery.trim()
     ? displayProjects.filter(p =>
-        p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.requester_name.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.unit.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.requester_name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : displayProjects;
 
   // Apply master proyek filter
-  filteredProjects = masterFilter === "all" 
-    ? filteredProjects 
+  filteredProjects = masterFilter === "all"
+    ? filteredProjects
     : filteredProjects.filter(p => p.master_proyek_id === masterFilter);
+
+  // Apply PIC filter
+  filteredProjects = picFilter === "all"
+    ? filteredProjects
+    : filteredProjects.filter(p => p.pic === picFilter);
 
   // Apply progress status filter (only for approved/active projects)
   if (progressFilter !== "all") {
-    filteredProjects = filteredProjects.filter(p => 
-      (p.status === 'approved' || p.status === 'active') && 
+    filteredProjects = filteredProjects.filter(p =>
+      (p.status === 'approved' || p.status === 'active') &&
       p.progress_status === progressFilter
     );
   }
@@ -205,13 +213,13 @@ export default function Index() {
     completed: approvedActiveUnfiltered.filter(p => p.progress_status === 'completed').length,
   };
 
-   // Sort active projects by progress status: in_progress first, then on_hold, then completed
-   const sortedActiveProjects = [...activeProjects].sort((a, b) => {
-     const order: Record<ProjectProgressStatus, number> = { 'in_progress': 0, 'on_hold': 1, 'completed': 2 };
-     const aOrder = order[a.progress_status || 'in_progress'];
-     const bOrder = order[b.progress_status || 'in_progress'];
-     return aOrder - bOrder;
-   });
+  // Sort active projects by progress status: in_progress first, then on_hold, then completed
+  const sortedActiveProjects = [...activeProjects].sort((a, b) => {
+    const order: Record<ProjectProgressStatus, number> = { 'in_progress': 0, 'on_hold': 1, 'completed': 2 };
+    const aOrder = order[a.progress_status || 'in_progress'];
+    const bOrder = order[b.progress_status || 'in_progress'];
+    return aOrder - bOrder;
+  });
 
   // Get role-specific welcome message
   const getWelcomeMessage = () => {
@@ -234,7 +242,7 @@ export default function Index() {
       const endDate = new Date(p.end_date);
       return isAfter(endDate, today) && isBefore(endDate, addDays(today, 14));
     });
-    
+
     const overdueProjects = activeProjects.filter(p => {
       if (!p.end_date) return false;
       return isBefore(new Date(p.end_date), today);
@@ -251,7 +259,7 @@ export default function Index() {
   // Executor-specific view
   if (isProjectExecutor && !isSuperAdmin) {
     const { upcomingDeadlines, overdueProjects, projectsByMaster } = getExecutorStats();
-    
+
     return (
       <SimpleLayout>
         <div className="space-y-6">
@@ -355,8 +363,8 @@ export default function Index() {
                       <span className="font-medium">{item.name}</span>
                       <span className="text-muted-foreground">{item.count} proyek</span>
                     </div>
-                    <Progress 
-                      value={activeProjects.length > 0 ? (item.count / activeProjects.length) * 100 : 0} 
+                    <Progress
+                      value={activeProjects.length > 0 ? (item.count / activeProjects.length) * 100 : 0}
                       className="h-2"
                     />
                   </div>
@@ -417,7 +425,7 @@ export default function Index() {
 
           {/* Progress Status Summary */}
           <div className="grid grid-cols-3 gap-3">
-            <Card 
+            <Card
               className={`cursor-pointer transition-all ${progressFilter === 'in_progress' ? 'ring-2 ring-success' : ''}`}
               onClick={() => setProgressFilter(progressFilter === 'in_progress' ? 'all' : 'in_progress')}
             >
@@ -429,7 +437,7 @@ export default function Index() {
                 </div>
               </CardContent>
             </Card>
-            <Card 
+            <Card
               className={`cursor-pointer transition-all ${progressFilter === 'on_hold' ? 'ring-2 ring-warning' : ''}`}
               onClick={() => setProgressFilter(progressFilter === 'on_hold' ? 'all' : 'on_hold')}
             >
@@ -441,7 +449,7 @@ export default function Index() {
                 </div>
               </CardContent>
             </Card>
-            <Card 
+            <Card
               className={`cursor-pointer transition-all ${progressFilter === 'completed' ? 'ring-2 ring-primary' : ''}`}
               onClick={() => setProgressFilter(progressFilter === 'completed' ? 'all' : 'completed')}
             >
@@ -516,7 +524,7 @@ export default function Index() {
                     {showAllOverdueTasks ? (
                       <><ChevronUp className="w-4 h-4 mr-2" /> Sembunyikan</>
                     ) : (
-                      <><ChevronDown className="w-4 h-4 mr-2" /> Lihat Semua ({filteredOverdueTasks.length} task)</>                    )}
+                      <><ChevronDown className="w-4 h-4 mr-2" /> Lihat Semua ({filteredOverdueTasks.length} task)</>)}
                   </Button>
                 )}
               </div>
@@ -532,10 +540,10 @@ export default function Index() {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {overdueProjects.map((project) => (
-                  <ProjectCard 
-                    key={project.id} 
-                    project={project} 
-                    compact 
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    compact
                     editRequestCount={getCount(project.id).total}
                   />
                 ))}
@@ -553,9 +561,9 @@ export default function Index() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {upcomingDeadlines.map((project) => (
                   <div key={project.id} className="relative">
-                    <ProjectCard 
-                      project={project} 
-                      compact 
+                    <ProjectCard
+                      project={project}
+                      compact
                       editRequestCount={getCount(project.id).total}
                     />
                     {project.end_date && (
@@ -573,14 +581,14 @@ export default function Index() {
           {activeProjects.length > 0 ? (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                 {sortedActiveProjects
+                {sortedActiveProjects
                   .filter(p => !overdueProjects.includes(p) && !upcomingDeadlines.includes(p))
                   .map((project) => (
-                    <ProjectCard 
-                      key={project.id} 
-                      project={project} 
-                      showAdminNote={false} 
-                      compact 
+                    <ProjectCard
+                      key={project.id}
+                      project={project}
+                      showAdminNote={false}
+                      compact
                       editRequestCount={getCount(project.id).total}
                       showObstaclesPreview
                     />
@@ -657,54 +665,54 @@ export default function Index() {
           />
         </div>
 
-         {/* Stats Cards - Total + Progress Status */}
-         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-           <Card>
-             <CardContent className="p-4 flex items-center gap-3">
-               <FolderKanban className="w-8 h-8 text-primary" />
-               <div>
-                 <div className="text-2xl font-bold">{stats.total}</div>
-                 <div className="text-xs text-muted-foreground">Total Proyek</div>
-               </div>
-             </CardContent>
-           </Card>
-           <Card 
-             className={`cursor-pointer transition-all ${progressFilter === 'in_progress' ? 'ring-2 ring-success' : ''}`}
-             onClick={() => setProgressFilter(progressFilter === 'in_progress' ? 'all' : 'in_progress')}
-           >
-             <CardContent className="p-4 flex items-center gap-3">
-               <PlayCircle className="w-8 h-8 text-success" />
-               <div>
-                 <div className="text-2xl font-bold">{progressCounts.in_progress}</div>
-                 <div className="text-xs text-muted-foreground">Aktif</div>
-               </div>
-             </CardContent>
-           </Card>
-           <Card 
-             className={`cursor-pointer transition-all ${progressFilter === 'on_hold' ? 'ring-2 ring-warning' : ''}`}
-             onClick={() => setProgressFilter(progressFilter === 'on_hold' ? 'all' : 'on_hold')}
-           >
-             <CardContent className="p-4 flex items-center gap-3">
-               <PauseCircle className="w-8 h-8 text-warning" />
-               <div>
-                 <div className="text-2xl font-bold">{progressCounts.on_hold}</div>
-                 <div className="text-xs text-muted-foreground">Pending</div>
-               </div>
-             </CardContent>
-           </Card>
-           <Card 
-             className={`cursor-pointer transition-all ${progressFilter === 'completed' ? 'ring-2 ring-primary' : ''}`}
-             onClick={() => setProgressFilter(progressFilter === 'completed' ? 'all' : 'completed')}
-           >
-             <CardContent className="p-4 flex items-center gap-3">
-               <CheckCircle2 className="w-8 h-8 text-primary" />
-               <div>
-                 <div className="text-2xl font-bold">{progressCounts.completed}</div>
-                 <div className="text-xs text-muted-foreground">Selesai</div>
-               </div>
-             </CardContent>
-           </Card>
-         </div>
+        {/* Stats Cards - Total + Progress Status */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <FolderKanban className="w-8 h-8 text-primary" />
+              <div>
+                <div className="text-2xl font-bold">{stats.total}</div>
+                <div className="text-xs text-muted-foreground">Total Proyek</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card
+            className={`cursor-pointer transition-all ${progressFilter === 'in_progress' ? 'ring-2 ring-success' : ''}`}
+            onClick={() => setProgressFilter(progressFilter === 'in_progress' ? 'all' : 'in_progress')}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <PlayCircle className="w-8 h-8 text-success" />
+              <div>
+                <div className="text-2xl font-bold">{progressCounts.in_progress}</div>
+                <div className="text-xs text-muted-foreground">Aktif</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card
+            className={`cursor-pointer transition-all ${progressFilter === 'on_hold' ? 'ring-2 ring-warning' : ''}`}
+            onClick={() => setProgressFilter(progressFilter === 'on_hold' ? 'all' : 'on_hold')}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <PauseCircle className="w-8 h-8 text-warning" />
+              <div>
+                <div className="text-2xl font-bold">{progressCounts.on_hold}</div>
+                <div className="text-xs text-muted-foreground">Pending</div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card
+            className={`cursor-pointer transition-all ${progressFilter === 'completed' ? 'ring-2 ring-primary' : ''}`}
+            onClick={() => setProgressFilter(progressFilter === 'completed' ? 'all' : 'completed')}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <CheckCircle2 className="w-8 h-8 text-primary" />
+              <div>
+                <div className="text-2xl font-bold">{progressCounts.completed}</div>
+                <div className="text-xs text-muted-foreground">Selesai</div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Only regular users can submit new projects */}
         {isRegularUser && (
@@ -740,33 +748,18 @@ export default function Index() {
 
         {activeProjects.length > 0 && (
           <div className="space-y-4">
-         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <h2 className="text-lg font-semibold">Proyek Aktif ({activeProjects.length})</h2>
               <div className="flex flex-col sm:flex-row gap-2">
-                <Select value={progressFilter} onValueChange={setProgressFilter}>
-                  <SelectTrigger className="w-full sm:w-[160px]">
-                    <SelectValue placeholder="Status Progres" />
+                <Select value={picFilter} onValueChange={setPicFilter}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="Filter PIC" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Semua Status</SelectItem>
-                    <SelectItem value="in_progress">
-                      <span className="flex items-center gap-2">
-                        <PlayCircle className="w-4 h-4 text-success" />
-                        Aktif
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="on_hold">
-                      <span className="flex items-center gap-2">
-                        <PauseCircle className="w-4 h-4 text-warning" />
-                        Pending
-                      </span>
-                    </SelectItem>
-                    <SelectItem value="completed">
-                      <span className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-primary" />
-                        Selesai
-                      </span>
-                    </SelectItem>
+                    <SelectItem value="all">Semua PIC</SelectItem>
+                    {picOptions.map((mp) => (
+                      <SelectItem key={mp.id} value={mp.name}>{mp.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={masterFilter} onValueChange={setMasterFilter}>
@@ -782,16 +775,16 @@ export default function Index() {
                 </Select>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-               {sortedActiveProjects.map((project) => (
-                <ProjectCard 
-                  key={project.id} 
-                  project={project} 
-                  showAdminNote={false} 
-                  compact 
+              {sortedActiveProjects.map((project) => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  showAdminNote={false}
+                  compact
                   editRequestCount={getCount(project.id).total}
-                   showObstaclesPreview={isSuperAdmin}
+                  showObstaclesPreview={isSuperAdmin}
                 />
               ))}
             </div>
@@ -804,11 +797,11 @@ export default function Index() {
             <h2 className="text-lg font-semibold">Menunggu Persetujuan ({pendingProjects.length})</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {pendingProjects.map((project) => (
-                <ProjectCard 
-                  key={project.id} 
-                  project={project} 
-                  showAdminNote={false} 
-                  compact 
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  showAdminNote={false}
+                  compact
                   editRequestCount={getCount(project.id).total}
                 />
               ))}
@@ -821,8 +814,8 @@ export default function Index() {
             <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold">Belum Ada Proyek</h3>
             <p className="text-muted-foreground mt-1">
-              {isSuperAdmin 
-                ? "Belum ada proyek yang diajukan." 
+              {isSuperAdmin
+                ? "Belum ada proyek yang diajukan."
                 : "Mulai ajukan inisiatif strategis pertama Anda."}
             </p>
             {isRegularUser && (
