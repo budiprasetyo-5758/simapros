@@ -80,6 +80,16 @@ Deno.serve(async (req) => {
     }
 
     // Clean up dependent rows that may not cascade
+    // 1. Project assignments
+    await admin.from("project_assignments").delete().eq("user_id", userId);
+    // 2. Monitoring links (set created_by to null)
+    await admin.from("monitoring_links").update({ created_by: null }).eq("created_by", userId);
+    // 3. Unit kerja change requests (set reviewed_by to null)
+    await admin.from("unit_kerja_change_requests").update({ reviewed_by: null }).eq("reviewed_by", userId);
+    // 4. Project obstacles (set created_by to null)
+    await admin.from("project_obstacles").update({ created_by: null }).eq("created_by", userId);
+
+    // Now safe to delete user roles and profiles
     await admin.from("user_roles").delete().eq("user_id", userId);
     await admin.from("profiles").delete().eq("id", userId);
 

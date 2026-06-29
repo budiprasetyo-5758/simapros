@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const url = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calendarId)}`;
+    const url = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(calendarId)}`;
     return new Response(JSON.stringify({ url }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -94,8 +94,18 @@ Deno.serve(async (req) => {
       throw new Error('Google Calendar credentials not configured. Please add GOOGLE_SERVICE_ACCOUNT_KEY and GOOGLE_CALENDAR_ID secrets.');
     }
 
+    console.log(`[sync-gcal] GOOGLE_CALENDAR_ID = "${calendarId}"`);
+    console.log(`[sync-gcal] Service account email = "${JSON.parse(serviceAccountJson).client_email}"`);
+
     const serviceAccount: ServiceAccountKey = JSON.parse(serviceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
+    let accessToken: string;
+    try {
+      accessToken = await getAccessToken(serviceAccount);
+      console.log('[sync-gcal] Access token obtained successfully (length=' + accessToken.length + ')');
+    } catch (tokenErr) {
+      console.error('[sync-gcal] Failed to get access token:', tokenErr);
+      throw new Error(`Failed to get Google access token: ${tokenErr.message}`);
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -103,50 +113,72 @@ Deno.serve(async (req) => {
 
     const appUrl = Deno.env.get('APP_URL') || 'https://simapros.my.id';
     const calendarApi = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+    console.log(`[sync-gcal] Calendar API URL = ${calendarApi}`);
 
     // ========================================================
-    // STEP 1: Cleanup old project events from Google Calendar
+    // STEP 1: Clean slate — delete ALL events from Google Calendar
     // ========================================================
-    console.log('[sync-gcal] Step 1: Cleaning up old project events...');
-
-    const { data: projectsWithEvents } = await supabase
-      .from('projects')
-      .select('id, title, google_calendar_event_id')
-      .not('google_calendar_event_id', 'is', null);
+    console.log('[sync-gcal] Step 1: Deleting ALL existing events from Google Calendar (clean slate)...');
 
     let cleaned = 0;
     const cleanupErrors: string[] = [];
 
-    for (const project of (projectsWithEvents || [])) {
-      try {
-        const delRes = await fetch(
-          `${calendarApi}/${project.google_calendar_event_id}`,
-          {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${accessToken}` },
-          }
-        );
+    try {
+      // List all events from Google Calendar (paginated)
+      let pageToken: string | undefined;
+      do {
+        const listUrl = pageToken
+          ? `${calendarApi}?maxResults=2500&pageToken=${pageToken}`
+          : `${calendarApi}?maxResults=2500`;
+        const listRes = await fetch(listUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
 
-        // 200/204 = deleted, 404/410 = already gone — all are fine
-        if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
-          await supabase
-            .from('projects')
-            .update({ google_calendar_event_id: null })
-            .eq('id', project.id);
-          cleaned++;
-          console.log(`[sync-gcal] Cleaned project event: ${project.title} (${project.id})`);
-        } else {
-          const errText = await delRes.text();
-          console.error(`[sync-gcal] Failed to cleanup project ${project.id}:`, errText);
-          cleanupErrors.push(`Project "${project.title}": ${delRes.status}`);
+        if (!listRes.ok) {
+          const errText = await listRes.text();
+          console.error('[sync-gcal] Failed to list events:', errText);
+          cleanupErrors.push(`List events failed: ${listRes.status}`);
+          break;
         }
-      } catch (e) {
-        console.error(`[sync-gcal] Error cleaning project ${project.id}:`, e);
-        cleanupErrors.push(`Project "${project.title}": ${e.message}`);
-      }
+
+        const listData = await listRes.json();
+        const events = listData.items || [];
+        console.log(`[sync-gcal] Found ${events.length} events to delete in this page.`);
+
+        for (const event of events) {
+          try {
+            const delRes = await fetch(`${calendarApi}/${event.id}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+
+            if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
+              cleaned++;
+              console.log(`[sync-gcal] Deleted event: "${event.summary}" (${event.id})`);
+            } else {
+              const errText = await delRes.text();
+              console.error(`[sync-gcal] Failed to delete event ${event.id}:`, errText);
+              cleanupErrors.push(`Event "${event.summary}": ${delRes.status}`);
+            }
+          } catch (e) {
+            console.error(`[sync-gcal] Error deleting event ${event.id}:`, e);
+            cleanupErrors.push(`Event "${event.summary}": ${e.message}`);
+          }
+        }
+
+        pageToken = listData.nextPageToken;
+      } while (pageToken);
+
+      // Clear all google_calendar_event_id from both tables so meetings get re-created fresh
+      await supabase.from('projects').update({ google_calendar_event_id: null }).not('google_calendar_event_id', 'is', null);
+      await supabase.from('meetings').update({ google_calendar_event_id: null }).not('google_calendar_event_id', 'is', null);
+      console.log('[sync-gcal] Cleared all google_calendar_event_id from projects and meetings tables.');
+    } catch (e) {
+      console.error('[sync-gcal] Error during cleanup:', e);
+      cleanupErrors.push(`Cleanup error: ${e.message}`);
     }
 
-    console.log(`[sync-gcal] Cleanup done. Removed ${cleaned} project events.`);
+    console.log(`[sync-gcal] Clean slate done. Deleted ${cleaned} events from Google Calendar.`);
 
     // ========================================================
     // STEP 2: Sync meetings to Google Calendar
@@ -261,6 +293,7 @@ Deno.serve(async (req) => {
 
         if (res.ok) {
           const eventData = await res.json();
+          console.log(`[sync-gcal] Google API response for "${meeting.title}": status=${res.status}, eventId=${eventData.id}, htmlLink=${eventData.htmlLink}`);
           // Save/update the Google Calendar event ID
           if (eventData.id) {
             await supabase
