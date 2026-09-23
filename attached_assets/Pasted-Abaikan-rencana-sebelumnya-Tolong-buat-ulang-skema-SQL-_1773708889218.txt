@@ -1,0 +1,63 @@
+Abaikan rencana sebelumnya. Tolong buat ulang skema SQL dan rencana UI untuk fitur "Follow Up" berdasarkan KEBUTUHAN BARU di bawah ini. 
+
+PENTING: Seluruh fitur, UI, route, dan RLS database untuk Follow Up ini HANYA KHUSUS untuk role `super_admin`. Sembunyikan dari role lain.
+
+[INSTRUKSI KHUSUS WORKFLOW]
+Langkah 1: Buatkan script SQL lengkap (DDL) untuk tabel, enum, dan RLS (hanya super_admin). Jangan nulis kode React dulu. Tunggu saya bilang "Database Ready".
+Langkah 2: Setelah "Database Ready", baru tulis kode React.
+
+--- KEBUTUHAN FITUR & UI BARU ---
+Sidebar menu: "Follow Up" (khusus super_admin). Tampilan awal berisi 3 Folder Card: Rapimtas, Rapim, Others.
+Ketika folder diklik, masuk ke halaman detail kategori yang memiliki 3 TAB UTAMA:
+
+1. TAB "MEETINGS" (Default Tab)
+- Berisi daftar meeting dalam bentuk CARD.
+- Tombol "Tambah Meeting" ada di sini.
+- Form Tambah Meeting:
+  a. Tanggal Meeting (Date picker, wajib).
+  b. Nama Meeting (HANYA MUNCUL dan wajib jika berada di folder "Others". Untuk Rapimtas/Rapim, sembunyikan field ini dan biarkan null/kosong).
+  c. Tasks (Dynamic list): Field-nya hanya "Nama Task", "Due Date" (Date picker), dan "PIC" (Text). TIDAK ADA upload file untuk task di form ini.
+  d. Upload File Notulensi.
+  e. Upload File Pendukung.
+- Tampilan Card Meeting: Menampilkan info meeting, daftar task dalam bentuk list biasa (hanya menampilkan nama, PIC, due date, status selesai), dan tombol download untuk file notulensi & pendukung. Di tab ini, task TIDAK BISA di-checklist selesai.
+
+2. TAB "TASK MEETING"
+- Berisi Data Table dari semua task yang ada di dalam kategori/folder tersebut.
+- Kolom Tabel: Task | PIC | Due Date | File | Action (Checkbox).
+- Tabel harus bisa di-sort (diurutkan) berdasarkan setiap kolom.
+- Kolom "File" berisi tombol/link untuk melihat file pendukung/notulensi dari meeting yang terkait dengan task tersebut.
+- Di tab Inilah user bisa MENCENTANG (Checklist) task menjadi "Selesai".
+
+3. TAB "FILE REPOSITORY"
+- Di dalam tab ini, bagi lagi menjadi 2 Sub-Tab: "File Notulensi" dan "File Pendukung".
+- Berisi daftar file sesuai kategorinya, lengkap dengan metadata (nama file, tanggal upload, dari meeting mana, dan tombol download).
+
+--- SKEMA DATABASE BARU ---
+Tolong buatkan script SQL-nya:
+
+followup_meetings:
+- id (uuid, PK)
+- category (text: 'rapimtas' | 'rapim' | 'others')
+- meeting_date (date, wajib)
+- title (text, nullable -> wajib hanya untuk others)
+- created_by (uuid, ref auth.users)
+- created_at, updated_at
+
+followup_tasks:
+- id (uuid, PK)
+- meeting_id (uuid, FK cascade)
+- title (text, nama task)
+- pic (text, nama penanggung jawab)
+- due_date (date)
+- is_completed (boolean, default false)
+- completed_at (timestamptz, nullable)
+- created_at, updated_at
+
+followup_files:
+- id (uuid, PK)
+- meeting_id (uuid, FK cascade)
+- file_name, file_url, file_size
+- file_category (text: 'notulensi' | 'pendukung')
+- uploaded_by, created_at
+
+Buatkan juga RLS-nya. Ingat, HANYA `super_admin` yang boleh SELECT, INSERT, UPDATE, DELETE.
