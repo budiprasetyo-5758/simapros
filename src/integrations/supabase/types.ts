@@ -197,14 +197,14 @@ export type Database = {
           action_plan: string
           category: string
           closed_at: string | null
-          coresec: string | null
+          coresec: string[]
           created_at: string
           created_by: string
           deadline: string
-          direksi: string | null
+          direksi: string[]
           id: string
           masalah: string
-          pic: string
+          pic: string[]
           status: string
           topik: string
           updated_at: string
@@ -214,14 +214,14 @@ export type Database = {
           action_plan: string
           category: string
           closed_at?: string | null
-          coresec?: string | null
+          coresec?: string[]
           created_at?: string
           created_by: string
           deadline: string
-          direksi?: string | null
+          direksi?: string[]
           id?: string
           masalah: string
-          pic: string
+          pic?: string[]
           status?: string
           topik: string
           updated_at?: string
@@ -231,20 +231,55 @@ export type Database = {
           action_plan?: string
           category?: string
           closed_at?: string | null
-          coresec?: string | null
+          coresec?: string[]
           created_at?: string
           created_by?: string
           deadline?: string
-          direksi?: string | null
+          direksi?: string[]
           id?: string
           masalah?: string
-          pic?: string
+          pic?: string[]
           status?: string
           topik?: string
           updated_at?: string
           upaya_tindak_lanjut?: string
         }
         Relationships: []
+      }
+      followup_tindak_lanjut_progress: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          note: string
+          progress_date: string
+          tindak_lanjut_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          note: string
+          progress_date?: string
+          tindak_lanjut_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string
+          progress_date?: string
+          tindak_lanjut_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followup_tindak_lanjut_progress_tindak_lanjut_id_fkey"
+            columns: ["tindak_lanjut_id"]
+            isOneToOne: false
+            referencedRelation: "followup_tindak_lanjut"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pic_options: {
         Row: {

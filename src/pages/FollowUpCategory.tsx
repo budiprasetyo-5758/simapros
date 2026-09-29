@@ -36,6 +36,8 @@ import {
   Upload,
   Download,
   FileText,
+  FileSpreadsheet,
+  Newspaper,
   CheckCircle2,
   ChevronDown,
   FolderOpen,
@@ -53,14 +55,15 @@ import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
-import { useTindakLanjut, useTindakLanjutStats } from '@/hooks/useTindakLanjut';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTindakLanjut, useTindakLanjutStats, useTindakLanjutProgress, useTindakLanjutProgressByCategory, type FollowUpTindakLanjut } from '@/hooks/useTindakLanjut';
 import { Badge } from '@/components/ui/badge';
 import { usePicOptions } from '@/hooks/usePicOptions';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { exportNotulensiPdf, exportNotulensiExcel, exportNotulensiWord } from '@/lib/exportNotulensi';
 
 const CATEGORY_LABELS: Record<string, string> = {
-  rapimtas: 'Rapimtas — Rapat Pimpinan Terbatas',
-  rapim: 'Rapim — Rapat Pimpinan',
+  rapimtas: 'RADIKTAS — Rapat Direksi Terbatas',
+  rapim: 'RAPIMTAS — Rapat Pimpinan Terbatas',
   others: 'Others — Lainnya',
 };
 
@@ -632,6 +635,71 @@ function FileRepositoryTab({ category }: { category: string }) {
   );
 }
 
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean) as string[];
+  return value ? [String(value)] : [];
+}
+
+function toMultiOptions(opts: { id: string; name: string }[]) {
+  return opts.map(o => ({ value: o.name, label: o.name }));
+}
+
+function ProgressSection({ tindakLanjutId, userId }: { tindakLanjutId: string; userId: string }) {
+  const { progressList, isLoading, addProgress, deleteProgress } = useTindakLanjutProgress(tindakLanjutId);
+  const [note, setNote] = useState('');
+  const [pDate, setPDate] = useState<Date | undefined>(new Date());
+
+  const handleAdd = async () => {
+    if (!note.trim() || !pDate) return;
+    await addProgress.mutateAsync({
+      tindak_lanjut_id: tindakLanjutId,
+      note: note.trim(),
+      progress_date: format(pDate, 'yyyy-MM-dd'),
+      created_by: userId,
+    });
+    setNote('');
+    setPDate(new Date());
+  };
+
+  return (
+    <div className="border-t pt-3 space-y-3">
+      <Label className="flex items-center gap-1.5"><ListChecks className="w-4 h-4" /> Progres Tindak Lanjut</Label>
+
+      {isLoading ? (
+        <Skeleton className="h-10 w-full" />
+      ) : progressList.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">Belum ada progress.</p>
+      ) : (
+        <div className="space-y-2 max-h-40 overflow-y-auto pr-1" data-testid="progress-list">
+          {progressList.map(p => (
+            <div key={p.id} className="flex items-start gap-2 text-sm border rounded-md p-2 bg-muted/30">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-primary">{format(new Date(p.progress_date + 'T00:00:00'), 'd MMM yyyy', { locale: localeId })}</p>
+                <p className="text-sm whitespace-pre-line break-words">{p.note}</p>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => deleteProgress.mutate(p.id)} disabled={deleteProgress.isPending} title="Hapus progress">
+                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="space-y-2 rounded-md border p-2">
+        <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Catatan progress yang sudah dilakukan..." className="min-h-[38px]" data-testid="input-progress-note" />
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <DatePicker value={pDate} onChange={setPDate} placeholder="Tanggal" testId="input-progress-date" />
+          </div>
+          <Button type="button" size="sm" onClick={handleAdd} disabled={!note.trim() || !pDate || addProgress.isPending} data-testid="button-add-progress">
+            <Plus className="w-4 h-4 mr-1" /> Tambah
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TindakLanjutDialog({
   open,
   onOpenChange,
@@ -655,9 +723,9 @@ function TindakLanjutDialog({
   const [upaya, setUpaya] = useState('');
   const [actionPlan, setActionPlan] = useState('');
   const [deadline, setDeadline] = useState<Date | undefined>(undefined);
-  const [pic, setPic] = useState('');
-  const [direksi, setDireksi] = useState('');
-  const [coresec, setCoresec] = useState('');
+  const [pic, setPic] = useState<string[]>([]);
+  const [direksi, setDireksi] = useState<string[]>([]);
+  const [coresec, setCoresec] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -667,16 +735,16 @@ function TindakLanjutDialog({
       setUpaya(editItem.upaya_tindak_lanjut);
       setActionPlan(editItem.action_plan);
       setDeadline(new Date(editItem.deadline));
-      setPic(editItem.pic || '');
-      setDireksi(editItem.direksi || '');
-      setCoresec(editItem.coresec || '');
+      setPic(toStringArray(editItem.pic));
+      setDireksi(toStringArray(editItem.direksi));
+      setCoresec(toStringArray(editItem.coresec));
     } else if (open) {
-      setTopik(''); setMasalah(''); setUpaya(''); setActionPlan(''); 
-      setDeadline(undefined); setPic(''); setDireksi(''); setCoresec('');
+      setTopik(''); setMasalah(''); setUpaya(''); setActionPlan('');
+      setDeadline(undefined); setPic([]); setDireksi([]); setCoresec([]);
     }
   }, [editItem, open]);
 
-  const isValid = topik.trim() && masalah.trim() && upaya.trim() && actionPlan.trim() && deadline && pic.trim() && direksi.trim() && coresec.trim();
+  const isValid = topik.trim() && masalah.trim() && upaya.trim() && actionPlan.trim() && deadline && pic.length > 0 && direksi.length > 0 && coresec.length > 0;
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -688,9 +756,9 @@ function TindakLanjutDialog({
         upaya_tindak_lanjut: upaya.trim(),
         action_plan: actionPlan.trim(),
         deadline: format(deadline!, 'yyyy-MM-dd'),
-        pic: pic.trim(),
-        direksi: direksi.trim(),
-        coresec: coresec.trim(),
+        pic,
+        direksi,
+        coresec,
       };
       
       if (editItem) {
@@ -736,43 +804,30 @@ function TindakLanjutDialog({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label>Direksi *</Label>
-              <Select value={direksi} onValueChange={setDireksi}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih Direksi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {direksiOptions.map(opt => <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Direksi * <span className="text-xs font-normal text-muted-foreground">(bisa &gt;1)</span></Label>
+              <MultiSelect options={toMultiOptions(direksiOptions)} selected={direksi} onChange={setDireksi} placeholder="Pilih Direksi" testId="select-direksi" />
             </div>
             <div className="space-y-1">
-              <Label>Coresec *</Label>
-              <Select value={coresec} onValueChange={setCoresec}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih Coresec" />
-                </SelectTrigger>
-                <SelectContent>
-                  {coresecOptions.map(opt => <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Coresec * <span className="text-xs font-normal text-muted-foreground">(bisa &gt;1)</span></Label>
+              <MultiSelect options={toMultiOptions(coresecOptions)} selected={coresec} onChange={setCoresec} placeholder="Pilih Coresec" testId="select-coresec" />
             </div>
             <div className="space-y-1">
-              <Label>PIC *</Label>
-              <Select value={pic} onValueChange={setPic}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih PIC" />
-                </SelectTrigger>
-                <SelectContent>
-                  {picOptions.map(opt => <SelectItem key={opt.id} value={opt.name}>{opt.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>PIC * <span className="text-xs font-normal text-muted-foreground">(bisa &gt;1)</span></Label>
+              <MultiSelect options={toMultiOptions(picOptions)} selected={pic} onChange={setPic} placeholder="Pilih PIC" testId="select-pic" />
             </div>
             <div className="space-y-1">
               <Label>Deadline *</Label>
-              <DatePicker value={deadline} onChange={setDeadline} placeholder="Pilih deadline" />
+              <DatePicker value={deadline} onChange={setDeadline} placeholder="Pilih deadline" testId="input-tl-deadline" />
             </div>
           </div>
+
+          {editItem ? (
+            <ProgressSection tindakLanjutId={editItem.id} userId={userId} />
+          ) : (
+            <p className="text-xs text-muted-foreground border-t pt-3">
+              Progres tindak lanjut bisa ditambahkan setelah item disimpan (buka kembali item untuk mengedit).
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
@@ -830,15 +885,15 @@ function TindakLanjutTab({ category, userId }: { category: string; userId: strin
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider opacity-75">Direksi</p>
-                    <p className="truncate mt-1 font-medium text-foreground">{tl.direksi || '-'}</p>
+                    <p className="truncate mt-1 font-medium text-foreground">{toStringArray(tl.direksi).join(', ') || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider opacity-75">Coresec</p>
-                    <p className="truncate mt-1 font-medium text-foreground">{tl.coresec || '-'}</p>
+                    <p className="truncate mt-1 font-medium text-foreground">{toStringArray(tl.coresec).join(', ') || '-'}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider opacity-75">PIC</p>
-                    <p className="truncate mt-1 font-medium text-foreground">{tl.pic || '-'}</p>
+                    <p className="truncate mt-1 font-medium text-foreground">{toStringArray(tl.pic).join(', ') || '-'}</p>
                   </div>
                 </div>
               </div>
@@ -884,6 +939,128 @@ function TindakLanjutTab({ category, userId }: { category: string; userId: strin
         userId={userId} 
         editItem={editItem}
       />
+    </div>
+  );
+}
+
+function NotulensiTab({ category, userId, categoryLabel }: { category: string; userId: string; categoryLabel: string }) {
+  const { tindakLanjutList, isLoading } = useTindakLanjut(category);
+  const { progressById } = useTindakLanjutProgressByCategory(category);
+  const [showDialog, setShowDialog] = useState(false);
+  const [editItem, setEditItem] = useState<FollowUpTindakLanjut | null>(null);
+  const [exporting, setExporting] = useState<false | 'pdf' | 'excel' | 'word'>(false);
+
+  const handleExport = async (kind: 'pdf' | 'excel' | 'word') => {
+    setExporting(kind);
+    try {
+      if (kind === 'pdf') await exportNotulensiPdf(categoryLabel, tindakLanjutList, progressById);
+      else if (kind === 'word') await exportNotulensiWord(categoryLabel, tindakLanjutList, progressById);
+      else await exportNotulensiExcel(categoryLabel, tindakLanjutList, progressById);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Tampilan tabel gaya notulen. Klik baris untuk mengedit atau menambah progress.</p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => handleExport('word')} disabled={exporting !== false || tindakLanjutList.length === 0} data-testid="button-export-word">
+            <FileText className="w-4 h-4 mr-1.5" /> {exporting === 'word' ? 'Menyiapkan...' : 'Word'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport('pdf')} disabled={exporting !== false || tindakLanjutList.length === 0} data-testid="button-export-pdf">
+            <Download className="w-4 h-4 mr-1.5" /> {exporting === 'pdf' ? 'Menyiapkan...' : 'PDF'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport('excel')} disabled={exporting !== false || tindakLanjutList.length === 0} data-testid="button-export-excel">
+            <FileSpreadsheet className="w-4 h-4 mr-1.5" /> {exporting === 'excel' ? 'Menyiapkan...' : 'Excel'}
+          </Button>
+          <Button size="sm" onClick={() => { setEditItem(null); setShowDialog(true); }} data-testid="button-add-tl-notulensi">
+            <Plus className="w-4 h-4 mr-1.5" /> Tambah
+          </Button>
+        </div>
+      </div>
+
+      {tindakLanjutList.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground border rounded-lg bg-card">
+          <Newspaper className="w-12 h-12 mx-auto mb-3 opacity-40" />
+          <p className="text-lg font-medium">Belum ada tindak lanjut</p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">No</TableHead>
+                <TableHead className="min-w-[10rem]">Topik</TableHead>
+                <TableHead className="min-w-[16rem]">Masalah &amp; Rencana Tindak Lanjut</TableHead>
+                <TableHead className="min-w-[12rem]">Action Plan</TableHead>
+                <TableHead className="min-w-[14rem]">Progres Tindak Lanjut</TableHead>
+                <TableHead className="min-w-[8rem]">Batas Waktu Penyelesaian</TableHead>
+                <TableHead className="min-w-[10rem]">PIC</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tindakLanjutList.map((tl, idx) => {
+                const entries = progressById[tl.id] ?? [];
+                return (
+                  <TableRow key={tl.id} className="cursor-pointer" onClick={() => { setEditItem(tl); setShowDialog(true); }} data-testid={`notulensi-row-${tl.id}`}>
+                    <TableCell className="align-top text-center">{idx + 1}</TableCell>
+                    <TableCell className="align-top">
+                      <div className="font-medium">{tl.topik}</div>
+                      <Badge variant={tl.status === 'open' ? 'outline' : 'secondary'} className={cn('mt-1', tl.status === 'open' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50')}>
+                        {tl.status.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <p className="text-xs font-semibold text-muted-foreground">Masalah</p>
+                      <p className="whitespace-pre-line break-words">{tl.masalah}</p>
+                      <p className="text-xs font-semibold text-muted-foreground mt-2">Rencana Tindak Lanjut</p>
+                      <p className="whitespace-pre-line break-words">{tl.upaya_tindak_lanjut}</p>
+                    </TableCell>
+                    <TableCell className="align-top whitespace-pre-line break-words">{tl.action_plan}</TableCell>
+                    <TableCell className="align-top">
+                      {entries.length === 0 ? (
+                        <span className="text-xs text-muted-foreground italic">Belum ada progress</span>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {entries.map(p => (
+                            <li key={p.id} className="text-sm">
+                              <span className="text-xs font-medium text-primary">{format(new Date(p.progress_date + 'T00:00:00'), 'd MMM yyyy', { locale: localeId })}: </span>
+                              <span className="whitespace-pre-line break-words">{p.note}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </TableCell>
+                    <TableCell className="align-top whitespace-nowrap">{format(new Date(tl.deadline + 'T00:00:00'), 'd MMM yyyy', { locale: localeId })}</TableCell>
+                    <TableCell className="align-top">
+                      {(() => {
+                        const namaList = [...toStringArray(tl.direksi), ...toStringArray(tl.pic), ...toStringArray(tl.coresec)];
+                        return namaList.length > 0 ? (
+                          <div className="space-y-0.5 text-sm">
+                            {namaList.map((nama, i) => <div key={i}>{nama}</div>)}
+                          </div>
+                        ) : <span className="text-muted-foreground">-</span>;
+                      })()}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      <TindakLanjutDialog open={showDialog} onOpenChange={setShowDialog} category={category} userId={userId} editItem={editItem} />
     </div>
   );
 }
@@ -960,6 +1137,9 @@ export default function FollowUpCategory() {
             <TabsTrigger value="tindak-lanjut" className="gap-1.5" data-testid="tab-tindak-lanjut">
               <Target className="h-4 w-4" /> Tindak Lanjut
             </TabsTrigger>
+            <TabsTrigger value="notulensi" className="gap-1.5" data-testid="tab-notulensi">
+              <Newspaper className="h-4 w-4" /> Notulensi
+            </TabsTrigger>
             <TabsTrigger value="meetings" className="gap-1.5" data-testid="tab-meetings">
               <ListChecks className="h-4 w-4" /> Meetings
             </TabsTrigger>
@@ -973,6 +1153,10 @@ export default function FollowUpCategory() {
 
           <TabsContent value="tindak-lanjut" className="mt-4">
             {user && <TindakLanjutTab category={validCategory} userId={user.id} />}
+          </TabsContent>
+
+          <TabsContent value="notulensi" className="mt-4">
+            {user && <NotulensiTab category={validCategory} userId={user.id} categoryLabel={categoryLabel} />}
           </TabsContent>
 
           <TabsContent value="meetings" className="mt-4">

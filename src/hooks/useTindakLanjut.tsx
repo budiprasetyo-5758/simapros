@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -7,7 +8,10 @@ type TindakLanjutRow = Database['public']['Tables']['followup_tindak_lanjut']['R
 type TindakLanjutInsert = Database['public']['Tables']['followup_tindak_lanjut']['Insert'];
 type TindakLanjutUpdate = Database['public']['Tables']['followup_tindak_lanjut']['Update'];
 
+type ProgressRow = Database['public']['Tables']['followup_tindak_lanjut_progress']['Row'];
+
 export type FollowUpTindakLanjut = TindakLanjutRow;
+export type FollowUpProgress = ProgressRow;
 
 export function useTindakLanjut(category: string) {
   const { toast } = useToast();
@@ -148,4 +152,104 @@ export function useTindakLanjutStats(category?: string) {
   });
 
   return { stats, isLoading };
+}
+
+// ── Progress (riwayat progress bertanggal) ──────────────────────────────
+
+export function useTindakLanjutProgress(tindakLanjutId?: string) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: progressList = [], isLoading } = useQuery({
+    queryKey: ['followup-tl-progress', tindakLanjutId],
+    enabled: !!tindakLanjutId,
+    queryFn: async (): Promise<FollowUpProgress[]> => {
+      const { data, error } = await supabase
+        .from('followup_tindak_lanjut_progress')
+        .select('*')
+        .eq('tindak_lanjut_id', tindakLanjutId!)
+        .order('progress_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['followup-tl-progress'] });
+    queryClient.invalidateQueries({ queryKey: ['followup-tl-progress-by-category'] });
+  };
+
+  const addProgress = useMutation({
+    mutationFn: async (input: { tindak_lanjut_id: string; note: string; progress_date: string; created_by: string }) => {
+      const { data, error } = await supabase
+        .from('followup_tindak_lanjut_progress')
+        .insert(input)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: 'Progress berhasil ditambahkan' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Gagal menambahkan progress', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteProgress = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('followup_tindak_lanjut_progress')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: 'Progress dihapus' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Gagal menghapus progress', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  return { progressList, isLoading, addProgress, deleteProgress };
+}
+
+/**
+ * Fetch every progress entry for a category in one query and group by
+ * tindak_lanjut_id (for the Notulensi table view).
+ */
+export function useTindakLanjutProgressByCategory(category: string) {
+  const { data = [], isLoading } = useQuery({
+    queryKey: ['followup-tl-progress-by-category', category],
+    enabled: !!category,
+    queryFn: async (): Promise<FollowUpProgress[]> => {
+      const { data, error } = await supabase
+        .from('followup_tindak_lanjut_progress')
+        .select('*, followup_tindak_lanjut!inner(category)')
+        .eq('followup_tindak_lanjut.category', category)
+        .order('progress_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []) as unknown as FollowUpProgress[];
+    },
+  });
+
+  const progressById = useMemo(() => {
+    const map: Record<string, FollowUpProgress[]> = {};
+    for (const row of data) {
+      (map[row.tindak_lanjut_id] ??= []).push(row);
+    }
+    return map;
+  }, [data]);
+
+  return { progressById, isLoading };
 }

@@ -10,15 +10,15 @@ import { FolderCheck, Users, UserCog, MoreHorizontal, CheckCircle2, CircleDashed
 const categories = [
   {
     key: 'rapimtas',
-    title: 'Rapimtas',
-    subtitle: 'Rapat Pimpinan Terbatas',
+    title: 'RADIKTAS',
+    subtitle: 'Rapat Direksi Terbatas',
     icon: UserCog,
     color: 'bg-blue-500',
   },
   {
     key: 'rapim',
-    title: 'Rapim',
-    subtitle: 'Rapat Pimpinan',
+    title: 'RAPIMTAS',
+    subtitle: 'Rapat Pimpinan Terbatas',
     icon: Users,
     color: 'bg-emerald-500',
   },
