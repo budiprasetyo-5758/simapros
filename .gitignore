@@ -11,10 +11,26 @@ node_modules
 dist
 dist-ssr
 supabase/data-export/
-supabase/migrations/
 *.local
+.env.*
+!.env.example
 .env.beta
 .env
+supabase/.temp
+supabase/import_data.sql
+supabase/beta_fix_missing_user.sql
+supabase/fix_auth_login_import.sql
+tsconfig*.tsbuildinfo
+attached_assets/Pasted-*.txt
+Draft SOP Filtering prioritas project HTO.pdf
+
+# Local credentials and key material
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.kilo/
 
 # Editor directories and files
 .vscode/*

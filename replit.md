@@ -31,7 +31,7 @@ Set in `.env` (for local dev) and as Replit Secrets (for production):
 
 Project Supabase beta untuk testing fungsional: `blitdxwxaztjaujxfrfe` (region sama dengan production: Sydney). Jalankan `npm run dev:beta` — Vite memuat `.env.beta` (jangan di-commit; sudah dicakup `.gitignore`).
 
-- Password semua akun hasil import snapshot: `Simapros2026!`
+- Kredensial akun hasil import dikelola di luar repository dan dibagikan secara aman.
 - Email eksternal tidak terkirim (`RESEND_API_KEY` dummy) — notifikasi in-app tetap jalan
 - Tombol Google, `sync-google-calendar`, dan OTP `verify-gmail` error (limitasi disengaja)
 - Free tier menjeda project idle ±7 hari — buka dashboard beta berkala selama fase testing

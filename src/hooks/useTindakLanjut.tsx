@@ -26,7 +26,7 @@ export function useTindakLanjut(category: string) {
         .select('*')
         .eq('category', category)
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       return data ?? [];
     },
@@ -39,7 +39,7 @@ export function useTindakLanjut(category: string) {
         .insert(input)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -61,7 +61,7 @@ export function useTindakLanjut(category: string) {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -77,17 +77,34 @@ export function useTindakLanjut(category: string) {
 
   const toggleStatus = useMutation({
     mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: string }) => {
-      const newStatus = currentStatus === 'open' ? 'closed' : 'open';
+      // Cycle: open → on_progress → closed → open
+      const statusCycle: Record<string, string> = {
+        open: 'on_progress',
+        on_progress: 'closed',
+        closed: 'open',
+      };
+      const newStatus = statusCycle[currentStatus] || 'open';
+
+      const updatePayload: Record<string, unknown> = { status: newStatus };
+
+      if (newStatus === 'on_progress') {
+        updatePayload.started_at = new Date().toISOString();
+        updatePayload.closed_at = null;
+      } else if (newStatus === 'closed') {
+        updatePayload.closed_at = new Date().toISOString();
+      } else {
+        // back to open
+        updatePayload.started_at = null;
+        updatePayload.closed_at = null;
+      }
+
       const { data, error } = await supabase
         .from('followup_tindak_lanjut')
-        .update({ 
-          status: newStatus,
-          closed_at: newStatus === 'closed' ? new Date().toISOString() : null 
-        })
+        .update(updatePayload)
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -106,7 +123,7 @@ export function useTindakLanjut(category: string) {
         .from('followup_tindak_lanjut')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -119,35 +136,36 @@ export function useTindakLanjut(category: string) {
     },
   });
 
-  return { 
-    tindakLanjutList, 
-    isLoading, 
-    createTindakLanjut, 
-    updateTindakLanjut, 
-    toggleStatus, 
-    deleteTindakLanjut 
+  return {
+    tindakLanjutList,
+    isLoading,
+    createTindakLanjut,
+    updateTindakLanjut,
+    toggleStatus,
+    deleteTindakLanjut
   };
 }
 
 export function useTindakLanjutStats(category?: string) {
-  const { data: stats = { total: 0, open: 0, closed: 0 }, isLoading } = useQuery({
+  const { data: stats = { total: 0, open: 0, on_progress: 0, closed: 0 }, isLoading } = useQuery({
     queryKey: ['followup-tindak-lanjut-stats', category],
     queryFn: async () => {
       let query = supabase.from('followup_tindak_lanjut').select('status');
-      
+
       if (category) {
         query = query.eq('category', category);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
-      
+
       const rows = data ?? [];
       const total = rows.length;
       const open = rows.filter(r => r.status === 'open').length;
+      const on_progress = rows.filter(r => r.status === 'on_progress').length;
       const closed = rows.filter(r => r.status === 'closed').length;
-      
-      return { total, open, closed };
+
+      return { total, open, on_progress, closed };
     }
   });
 

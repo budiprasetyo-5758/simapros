@@ -50,6 +50,7 @@ import {
   LayoutDashboard,
   CircleDashed,
   Target,
+  Loader,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { id as localeId } from 'date-fns/locale';
@@ -760,7 +761,7 @@ function TindakLanjutDialog({
         direksi,
         coresec,
       };
-      
+
       if (editItem) {
         await updateTindakLanjut.mutateAsync({
           id: editItem.id,
@@ -873,11 +874,11 @@ function TindakLanjutTab({ category, userId }: { category: string; userId: strin
               <div className="p-5 space-y-4">
                 <div className="flex justify-between items-start gap-2">
                   <h3 className="font-bold text-base leading-tight line-clamp-2">{tl.topik}</h3>
-                  <Badge variant={tl.status === 'open' ? 'outline' : 'secondary'} className={cn('flex-shrink-0', tl.status === 'open' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50')}>
-                    {tl.status.toUpperCase()}
+                  <Badge variant={tl.status === 'closed' ? 'secondary' : 'outline'} className={cn('flex-shrink-0', tl.status === 'open' ? 'text-amber-600 border-amber-200 bg-amber-50' : tl.status === 'on_progress' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50')}>
+                    {tl.status === 'on_progress' ? 'ON PROGRESS' : tl.status.toUpperCase()}
                   </Badge>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-y-3 text-sm text-muted-foreground bg-muted/30 p-3 rounded-lg">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider opacity-75">Deadline</p>
@@ -898,22 +899,57 @@ function TindakLanjutTab({ category, userId }: { category: string; userId: strin
                 </div>
               </div>
               <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm rounded-full p-0.5 z-10 shadow-sm border">
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-7 w-7 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleStatus.mutate({ id: tl.id, currentStatus: tl.status });
-                  }}
-                  disabled={toggleStatus.isPending}
-                  title="Toggle Status"
-                >
-                  <CheckCircle2 className={cn("w-4 h-4", tl.status === 'open' ? 'text-emerald-600' : 'text-amber-600')} />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                {tl.status === 'on_progress' ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStatus.mutate({ id: tl.id, currentStatus: 'closed' });
+                      }}
+                      disabled={toggleStatus.isPending}
+                      title="Kembali ke Open"
+                    >
+                      <CircleDashed className="w-4 h-4 text-amber-600" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleStatus.mutate({ id: tl.id, currentStatus: tl.status });
+                      }}
+                      disabled={toggleStatus.isPending}
+                      title="Set Closed"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStatus.mutate({ id: tl.id, currentStatus: tl.status });
+                    }}
+                    disabled={toggleStatus.isPending}
+                    title={tl.status === 'open' ? 'Set On Progress' : 'Set Open'}
+                  >
+                    {tl.status === 'open' ? (
+                      <Loader className="w-4 h-4 text-blue-600" />
+                    ) : (
+                      <CircleDashed className="w-4 h-4 text-amber-600" />
+                    )}
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="h-7 w-7 rounded-full hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -932,11 +968,11 @@ function TindakLanjutTab({ category, userId }: { category: string; userId: strin
         </div>
       )}
 
-      <TindakLanjutDialog 
-        open={showDialog} 
-        onOpenChange={setShowDialog} 
-        category={category} 
-        userId={userId} 
+      <TindakLanjutDialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+        category={category}
+        userId={userId}
         editItem={editItem}
       />
     </div>
@@ -1016,8 +1052,8 @@ function NotulensiTab({ category, userId, categoryLabel }: { category: string; u
                     <TableCell className="align-top text-center">{idx + 1}</TableCell>
                     <TableCell className="align-top">
                       <div className="font-medium">{tl.topik}</div>
-                      <Badge variant={tl.status === 'open' ? 'outline' : 'secondary'} className={cn('mt-1', tl.status === 'open' ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50')}>
-                        {tl.status.toUpperCase()}
+                      <Badge variant={tl.status === 'closed' ? 'secondary' : 'outline'} className={cn('mt-1', tl.status === 'open' ? 'text-amber-600 border-amber-200 bg-amber-50' : tl.status === 'on_progress' ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50')}>
+                        {tl.status === 'on_progress' ? 'ON PROGRESS' : tl.status.toUpperCase()}
                       </Badge>
                     </TableCell>
                     <TableCell className="align-top">
@@ -1102,7 +1138,7 @@ export default function FollowUpCategory() {
         </div>
 
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="p-4 flex items-center gap-4 bg-indigo-50 border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900">
             <div className="p-3 bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 rounded-full">
               <LayoutDashboard className="w-6 h-6" />
@@ -1119,6 +1155,15 @@ export default function FollowUpCategory() {
             <div>
               <p className="text-sm font-medium text-muted-foreground">Status Open</p>
               {statsLoading ? <Skeleton className="h-7 w-12 mt-1" /> : <h3 className="text-2xl font-bold">{stats.open}</h3>}
+            </div>
+          </Card>
+          <Card className="p-4 flex items-center gap-4 bg-blue-50 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900">
+            <div className="p-3 bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400 rounded-full">
+              <Loader className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">On Progress</p>
+              {statsLoading ? <Skeleton className="h-7 w-12 mt-1" /> : <h3 className="text-2xl font-bold">{stats.on_progress}</h3>}
             </div>
           </Card>
           <Card className="p-4 flex items-center gap-4 bg-emerald-50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900">

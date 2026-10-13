@@ -73,7 +73,7 @@ To connect a domain, navigate to Project > Settings > Domains and click Connect 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
 ## Lingkungan Beta
 
-Untuk testing fungsional tersedia project Supabase beta (`blitdxwxaztjaujxfrfe`). Jalankan `npm run dev:beta` (memuat `.env.beta`), login dengan akun hasil import snapshot production (password semua akun: `Simapros2026!`). Limitasi: email eksternal tidak terkirim, Google OAuth/Calendar tidak aktif. Setup ulang database beta, aturan `--project-ref` eksplisit, dan workflow beta-first: lihat bagian "Lingkungan Beta" di `replit.md`.
+Untuk testing fungsional tersedia project Supabase beta (`blitdxwxaztjaujxfrfe`). Jalankan `npm run dev:beta` (memuat `.env.beta`) dan gunakan kredensial beta yang dibagikan secara aman. Limitasi: email eksternal tidak terkirim, Google OAuth/Calendar tidak aktif. Setup ulang database beta, aturan `--project-ref` eksplisit, dan workflow beta-first: lihat bagian "Lingkungan Beta" di `replit.md`.
 
 ## Penilaian Prioritas Proyek (SOP/HTO/001/2026)
 

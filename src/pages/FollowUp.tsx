@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTindakLanjutStats } from '@/hooks/useTindakLanjut';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FolderCheck, Users, UserCog, MoreHorizontal, CheckCircle2, CircleDashed, LayoutDashboard } from 'lucide-react';
+import { FolderCheck, Users, UserCog, MoreHorizontal, CheckCircle2, CircleDashed, LayoutDashboard, Loader } from 'lucide-react';
 
 const categories = [
   {
@@ -53,7 +53,7 @@ export default function FollowUp() {
         </div>
 
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="p-4 flex items-center gap-4 bg-indigo-50 border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900">
             <div className="p-3 bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 rounded-full">
               <LayoutDashboard className="w-6 h-6" />
@@ -70,6 +70,15 @@ export default function FollowUp() {
             <div>
               <p className="text-sm font-medium text-muted-foreground">Status Open</p>
               {statsLoading ? <Skeleton className="h-7 w-12 mt-1" /> : <h3 className="text-2xl font-bold">{stats.open}</h3>}
+            </div>
+          </Card>
+          <Card className="p-4 flex items-center gap-4 bg-blue-50 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900">
+            <div className="p-3 bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400 rounded-full">
+              <Loader className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">On Progress</p>
+              {statsLoading ? <Skeleton className="h-7 w-12 mt-1" /> : <h3 className="text-2xl font-bold">{stats.on_progress}</h3>}
             </div>
           </Card>
           <Card className="p-4 flex items-center gap-4 bg-emerald-50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900">
